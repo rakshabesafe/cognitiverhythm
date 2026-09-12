@@ -29,4 +29,5 @@ export interface DataStore {
 
   listUsers(): Promise<UserRecord[]>;
   listAllResponses(): Promise<ResponseRecord[]>;
+  deleteUser(id: string): Promise<void>;
 }

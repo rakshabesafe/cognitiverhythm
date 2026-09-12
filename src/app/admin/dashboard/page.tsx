@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { LIKERT_MODULES } from "@/lib/survey/schema";
 import type { UserRecord } from "@/lib/db";
 import { AdminLogoutButton } from "@/components/ui/AdminLogoutButton";
+import { UserTable } from "@/components/admin/UserTable";
 
 const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -26,6 +27,20 @@ export default async function AdminDashboardPage() {
     const count = users.filter((u) => responseByUserId.get(u.id)?.completedModules.includes(mod.id)).length;
     return { title: mod.title, count };
   });
+
+  const userRows = users
+    .map((u) => {
+      const record = responseByUserId.get(u.id);
+      return {
+        id: u.id,
+        email: u.email,
+        createdAt: u.createdAt,
+        completedAt: record?.completedAt,
+        completedModules: record?.completedModules.length ?? 0,
+        totalModules: LIKERT_MODULES.length,
+      };
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-6 py-10">
@@ -53,6 +68,8 @@ export default async function AdminDashboardPage() {
           ))}
         </div>
       </div>
+
+      <UserTable rows={userRows} />
 
       <a
         href="/api/admin/export"

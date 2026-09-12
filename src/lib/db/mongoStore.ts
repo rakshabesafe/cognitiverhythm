@@ -227,4 +227,12 @@ export const mongoStore: DataStore = {
     const docs = await db.collection<ResponseDoc>("responses").find().toArray();
     return docs.map(toResponseRecord);
   },
+
+  async deleteUser(id) {
+    const db = await getDb();
+    await Promise.all([
+      db.collection<UserDoc>("users").deleteOne({ _id: id }),
+      db.collection<ResponseDoc>("responses").deleteOne({ _id: id }),
+    ]);
+  },
 };

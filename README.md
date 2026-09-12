@@ -78,6 +78,7 @@ The incentive for completing it honestly and fully is the personalized report it
 * **Secure Admin Gateway:** A hidden login route (`/admin`) restricted to researcher credentials, entirely separate from participant accounts.
 * **Real-Time Analytics Dashboard:** High-level metrics showing total registered users, active users, and fully completed profiles, plus per-section completion rates.
 * **Data Export Engine:** A one-click download that compiles all participant responses into a flattened CSV, aligning unique participant IDs with their demographic and item-level answers across every section for easy import into statistical software (e.g., SPSS, AMOS, or Python).
+* **Participant Management:** A selectable table of all registered participants (email, registration date, completion progress) with a confirmed batch-delete action that permanently removes a participant's account and all their survey responses — for removing test/invalid data.
 
 ## 5. Non-Functional & Technical Requirements
 * **Mobile-First Responsiveness:** The UI must adapt flawlessly to mobile screens, catering to users going through their profile on their phones during breaks.

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { computeCompletion } from "./completion";
 import type { DataStore, ResponseRecord, UserRecord } from "./types";
@@ -151,5 +151,20 @@ export const jsonStore: DataStore = {
       users.map((u) => readJson<ResponseRecord>(responseFile(u.id), emptyResponses(u.id)))
     );
     return records;
+  },
+
+  async deleteUser(id) {
+    await withLock(USERS_FILE, async () => {
+      const users = await readJson<UserRecord[]>(USERS_FILE, []);
+      await writeJson(USERS_FILE, users.filter((u) => u.id !== id));
+    });
+    await withLock(responseFile(id), async () => {
+      try {
+        await unlink(responseFile(id));
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") return;
+        throw err;
+      }
+    });
   },
 };
