@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Dark theme is the only theme for v1 — no light mode / toggle. */
+:root {
+  --background: #0b0d12;
+  --surface: #14171f;
+  --surface-raised: #1b1f2a;
+  --border: #2a2f3d;
+  --foreground: #e8eaf0;
+  --muted: #9aa1b2;
+  --accent: #6ea8fe;
+  --accent-strong: #4f8cf7;
+  --success: #4ade80;
+  --danger: #f87171;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  :root {
+    --background: #ffffff;
+    --surface: #f6f7f9;
+    --surface-raised: #eef0f3;
+    --border: #d7dae0;
+    --foreground: #14171f;
+    --muted: #565d6d;
+  }
+  body {
+    background: #ffffff;
+  }
+}
