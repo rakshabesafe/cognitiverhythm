@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server";
-import { verifyPassword } from "@/lib/auth/password";
+import { verifyAdminCredentials } from "@/lib/auth/adminCredentials";
 import { ADMIN_COOKIE, setSessionCookie, signSession } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const email = typeof body?.email === "string" ? body.email.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-  const adminHash = process.env.ADMIN_PASSWORD_HASH;
-
-  const valid =
-    Boolean(adminEmail && adminHash) &&
-    email === adminEmail &&
-    (await verifyPassword(password, adminHash as string));
+  const valid = email ? await verifyAdminCredentials(email, password) : false;
 
   if (!valid) {
     return NextResponse.json({ error: "Invalid admin credentials." }, { status: 401 });

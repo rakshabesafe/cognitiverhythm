@@ -26,6 +26,11 @@ export default function LoginPage() {
         setError(data.error ?? "Something went wrong.");
         return;
       }
+      if (data.isAdmin) {
+        router.push("/admin/dashboard");
+        router.refresh();
+        return;
+      }
       router.push(data.hasConsented ? "/dashboard" : "/consent");
       router.refresh();
     } finally {

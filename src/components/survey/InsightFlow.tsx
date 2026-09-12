@@ -22,10 +22,62 @@ interface InsightFlowProps {
   analyzingLabel?: string;
 }
 
+interface GritBenchmark {
+  yourScore: number;
+  scaleMax: number;
+  studyPeerAverage: number | null;
+  studyPeerCount: number;
+  worldAverage: number;
+  worldSampleSize: number;
+  worldCitation: string;
+}
+
 interface HookData {
   heading: string;
   stat: string;
   pivot: string;
+  benchmark?: GritBenchmark;
+}
+
+function BenchmarkBar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "you" | "peer" | "world" }) {
+  const pct = Math.max(0, Math.min(100, ((value - 1) / (max - 1)) * 100));
+  const barColor = tone === "you" ? "bg-accent" : tone === "peer" ? "bg-foreground/60" : "bg-muted";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-xs text-muted">
+        <span>{label}</span>
+        <span className="font-medium text-foreground">{value.toFixed(2)} / {max}</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-border">
+        <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function GritBenchmarkCard({ benchmark }: { benchmark: GritBenchmark }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">How your grit compares</p>
+      <div className="flex flex-col gap-3">
+        <BenchmarkBar label="You" value={benchmark.yourScore} max={benchmark.scaleMax} tone="you" />
+        {benchmark.studyPeerAverage !== null && (
+          <BenchmarkBar
+            label={`IT professionals in this study (${benchmark.studyPeerCount} so far)`}
+            value={benchmark.studyPeerAverage}
+            max={benchmark.scaleMax}
+            tone="peer"
+          />
+        )}
+        <BenchmarkBar label="Published research average (general population)" value={benchmark.worldAverage} max={benchmark.scaleMax} tone="world" />
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        General-population figure from {benchmark.worldCitation}, N={benchmark.worldSampleSize.toLocaleString()}, measured on a
+        comparable 1–5 scale. Provided as a rough reference point, not a like-for-like clinical comparison — that study used
+        differently worded items than this one.
+      </p>
+    </div>
+  );
 }
 
 const MIN_ANALYZING_MS = 2200;
@@ -102,6 +154,7 @@ export function InsightFlow({
         <h1 className="mt-1 text-2xl font-semibold text-foreground">{hook?.heading}</h1>
       </div>
       <p className="text-foreground/90">{hook?.stat}</p>
+      {hook?.benchmark && <GritBenchmarkCard benchmark={hook.benchmark} />}
       <p className="text-muted">{hook?.pivot}</p>
       <button
         type="button"
