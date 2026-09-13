@@ -161,48 +161,97 @@ export interface BenchmarkRow {
   comparisonText: string;
 }
 
+function buildBenchmarkRow(mod: LikertModule, myAnswers: Record<string, number>, peer: PeerStat): BenchmarkRow {
+  const mean = moduleMean(mod, myAnswers) ?? 0;
+  const max = SCALES[mod.scale].labels.length;
+  const pct = toPct(mean, max);
+  const band = bandFor(pct);
+  const direction = DIRECTIONS[mod.id];
+  const good = (direction === "positive" && band === "High") || (direction === "negative" && band === "Low");
+  const bad = (direction === "positive" && band === "Low") || (direction === "negative" && band === "High");
+  const emoji: BenchmarkRow["emoji"] = good ? "🟢" : bad ? "🔴" : "🟡";
+
+  let comparisonText: string;
+  if (peer.average === null) {
+    comparisonText = "You're among the first to complete this — no peer comparison yet.";
+  } else {
+    const diff = mean - peer.average;
+    const meaningful = Math.abs(diff) > max * 0.08;
+    if (!meaningful) {
+      comparisonText = "In line with your peers.";
+    } else if (diff > 0) {
+      comparisonText = direction === "positive" ? "Higher than your peers." : "Higher than your peers — worth watching.";
+    } else {
+      comparisonText = direction === "positive" ? "Lower than your peers." : "Lower than your peers.";
+    }
+  }
+
+  return {
+    moduleId: mod.id,
+    title: mod.title,
+    yourScore: Math.round(mean * 100) / 100,
+    max,
+    peerAverage: peer.average != null ? Math.round(peer.average * 100) / 100 : null,
+    peerCount: peer.count,
+    band,
+    emoji,
+    comparisonText,
+  };
+}
+
 export function computeBenchmark(
   myAnswers: Record<string, number>,
   peerAverages: Record<string, PeerStat>
 ): BenchmarkRow[] {
-  return LIKERT_MODULES.map((mod) => {
-    const mean = moduleMean(mod, myAnswers) ?? 0;
-    const max = SCALES[mod.scale].labels.length;
-    const pct = toPct(mean, max);
-    const band = bandFor(pct);
-    const direction = DIRECTIONS[mod.id];
-    const good = (direction === "positive" && band === "High") || (direction === "negative" && band === "Low");
-    const bad = (direction === "positive" && band === "Low") || (direction === "negative" && band === "High");
-    const emoji: BenchmarkRow["emoji"] = good ? "🟢" : bad ? "🔴" : "🟡";
+  return LIKERT_MODULES.map((mod) => buildBenchmarkRow(mod, myAnswers, peerAverages[mod.id] ?? { average: null, count: 0 }));
+}
 
-    const peer = peerAverages[mod.id];
-    let comparisonText: string;
-    if (!peer || peer.average === null) {
-      comparisonText = "You're among the first to complete this — no peer comparison yet.";
-    } else {
-      const diff = mean - peer.average;
-      const meaningful = Math.abs(diff) > max * 0.08;
-      if (!meaningful) {
-        comparisonText = "In line with your peers.";
-      } else if (diff > 0) {
-        comparisonText = direction === "positive" ? "Higher than your peers." : "Higher than your peers — worth watching.";
-      } else {
-        comparisonText = direction === "positive" ? "Lower than your peers." : "Lower than your peers.";
-      }
-    }
+/**
+ * Benchmark rows for just the given modules, computed against live in-study peers who've
+ * reached each module (not just fully-completed participants) — used by the tier report
+ * pages, which a participant can unlock well before finishing the whole assessment.
+ */
+export function computeBenchmarkForModules(
+  moduleIds: string[],
+  myAnswers: Record<string, number>,
+  peerResponses: { answers: Record<string, number> }[]
+): BenchmarkRow[] {
+  return LIKERT_MODULES.filter((m) => moduleIds.includes(m.id)).map((mod) =>
+    buildBenchmarkRow(mod, myAnswers, computeModulePeerStat(mod.id, peerResponses))
+  );
+}
 
+// --- Confidence (Self-Efficacy) narrative -----------------------------------
+
+export interface ConfidenceNarrative {
+  band: Band;
+  heading: string;
+  body: string;
+}
+
+export function confidenceNarrative(answers: Record<string, number>): ConfidenceNarrative {
+  const pct = pctForModule("self-efficacy", answers);
+  const band = bandFor(pct);
+
+  if (band === "High") {
     return {
-      moduleId: mod.id,
-      title: mod.title,
-      yourScore: Math.round(mean * 100) / 100,
-      max,
-      peerAverage: peer?.average != null ? Math.round(peer.average * 100) / 100 : null,
-      peerCount: peer?.count ?? 0,
       band,
-      emoji,
-      comparisonText,
+      heading: "You trust your own hands on the wheel.",
+      body: "Your answers show strong occupational self-efficacy — you consistently believe you can find a way through whatever your job throws at you, and that belief tends to be self-fulfilling: it's what lets grit and adaptability actually convert into sustained performance instead of burnout.",
     };
-  });
+  }
+  if (band === "Moderate") {
+    return {
+      band,
+      heading: "Your confidence holds up — most of the time.",
+      body: "You generally trust your ability to handle what comes your way, though it isn't unshakeable yet. That's a normal, workable place to be — confidence like this tends to grow fastest from small, concrete wins rather than from reassurance alone.",
+    };
+  }
+  return {
+    band,
+    heading: "Your skills may be ahead of your confidence in them.",
+    body: "Your answers suggest you're less sure of your ability to handle job demands than your effort and adaptability elsewhere would predict. That gap is worth naming — low self-efficacy can quietly cap how much of your real capability actually shows up at work, independent of how capable you actually are.",
+  };
 }
 
 // --- Operating profile / archetype -----------------------------------------

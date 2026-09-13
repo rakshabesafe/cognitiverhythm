@@ -4,13 +4,12 @@ import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import {
   countAnsweredRequiredDemographics,
-  DEMOGRAPHICS,
-  isDemographicsComplete,
-  LIKERT_MODULES,
   TOTAL_LIKERT_ITEMS,
   TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS,
 } from "@/lib/survey/schema";
-import { ModuleCard } from "@/components/survey/ModuleCard";
+import { getNextRoute } from "@/lib/survey/scoring";
+import { isTierUnlocked, PROFILE_TIERS, tierProgress } from "@/lib/survey/tiers";
+import { ProfileTierCard } from "@/components/survey/ProfileTierCard";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 
@@ -24,61 +23,92 @@ export default async function DashboardPage() {
   const answeredItems = Object.keys(responses.answers).length;
   const totalItems = TOTAL_LIKERT_ITEMS + TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS;
   const overallPercent = ((answeredItems + demographicsAnswered) / totalItems) * 100;
+  const nextRoute = getNextRoute(responses);
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Cognitive Rhythm &amp; Resilience</p>
-          <h1 className="text-xl font-semibold text-foreground">Your Rhythm Map</h1>
+          <h1 className="text-xl font-semibold text-foreground">Your Profile</h1>
         </div>
         <LogoutButton />
       </div>
 
       <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4">
         <ProgressRing percent={overallPercent} size={64} />
-        <div>
-          <p className="font-medium text-foreground">Overall completion</p>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-foreground">
+            {responses.completedAt ? "Your profile is fully unlocked" : "Unlocking your profile"}
+          </p>
           <p className="text-sm text-muted">
             {responses.completedAt
-              ? "All done — your personalized report is ready below."
-              : "Work through each dimension at your own pace to unlock your personalized report."}
+              ? "Every report below is ready to view."
+              : "Keep going to unlock each report below, then your full combined report."}
           </p>
         </div>
       </div>
 
-      {responses.completedAt && (
+      {!responses.completedAt && (
         <Link
-          href="/results"
+          href={nextRoute}
           className="min-h-14 rounded-xl bg-accent px-4 py-3 text-center font-medium text-background"
         >
-          View your personalized report
+          Continue unlocking your profile
         </Link>
       )}
 
       <div className="flex flex-col gap-3">
-        <ModuleCard
-          href="/survey/demographics"
-          title={DEMOGRAPHICS.title}
-          description={DEMOGRAPHICS.description}
-          answered={demographicsAnswered}
-          total={TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS}
-          completed={isDemographicsComplete(responses.demographics)}
-        />
-        {LIKERT_MODULES.map((mod) => {
-          const answered = mod.items.filter((i) => typeof responses.answers[i.code] === "number").length;
+        {PROFILE_TIERS.map((tier) => {
+          const unlocked = isTierUnlocked(tier, responses.completedModules);
+          const { answered, total } = tierProgress(tier, responses.answers);
+          const percent = total > 0 ? (answered / total) * 100 : 0;
           return (
-            <ModuleCard
-              key={mod.id}
-              href={`/survey/${mod.id}`}
-              title={mod.title}
-              description={mod.description}
-              answered={answered}
-              total={mod.items.length}
-              completed={responses.completedModules.includes(mod.id)}
+            <ProfileTierCard
+              key={tier.id}
+              tier={tier}
+              unlocked={unlocked}
+              percent={percent}
+              continueHref={nextRoute}
             />
           );
         })}
+
+        {responses.completedAt ? (
+          <Link
+            href="/results"
+            className="flex items-center gap-4 rounded-2xl border border-accent/40 bg-accent/10 p-4 transition-colors hover:bg-accent/15"
+          >
+            <span className="text-2xl" aria-hidden>
+              📊
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 font-medium text-foreground">
+                Full Combined Report
+                <span className="text-xs font-normal text-accent">🔓 Unlocked</span>
+              </p>
+              <p className="truncate text-sm text-muted">
+                Your peer benchmark, operating profile, and strategic action plan — all in one place.
+              </p>
+            </div>
+            <span className="shrink-0 text-sm text-accent">View →</span>
+          </Link>
+        ) : (
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 opacity-70">
+            <span className="text-2xl grayscale" aria-hidden>
+              📊
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 font-medium text-foreground">
+                Full Combined Report
+                <span className="text-xs font-normal text-muted">🔒 Locked</span>
+              </p>
+              <p className="truncate text-sm text-muted">
+                Unlocks once every profile above is complete.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
