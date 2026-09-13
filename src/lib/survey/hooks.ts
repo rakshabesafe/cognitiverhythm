@@ -1,14 +1,12 @@
-import { HIGH, type PeerStat } from "./scoring";
+import { GRIT_FACETS } from "./schema";
+import { HIGH, type GritFacetScore, type PeerStat } from "./scoring";
 
-// Informal groupings of the 12 Grit items, used ONLY to pick which motivational
-// "hook" resonates most right after the Grit section. These are presentation-layer
-// heuristics, not an additional scored construct — the official Grit score used in
-// the report/archetype/CSV export is still the single 12-item mean.
-const EFFORT_ITEMS = ["G4", "G5", "G6"]; // monitor/control self, learn from mistakes, work hard
-const INITIATIVE_ITEMS = ["G1", "G2", "G7"]; // leave comfort zone, new ideas, adaptable in distress
-const STEADFASTNESS_ITEMS = ["G3", "G8", "G9", "G10", "G11", "G12"]; // won't be deterred, sense of purpose
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
 const CONTEXTUAL_PERFORMANCE_ITEMS = ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CP7", "CP8"];
+
+function facetItems(id: string): string[] {
+  return GRIT_FACETS.find((f) => f.id === id)?.items ?? [];
+}
 
 function meanOf(codes: string[], answers: Record<string, number>): number {
   const values = codes.map((c) => answers[c]).filter((v): v is number => typeof v === "number");
@@ -21,106 +19,73 @@ function pctOf5(mean: number): number {
   return (mean - 1) / 4;
 }
 
-// A real, cited external reference point (not invented) for "how does grit compare
-// worldwide" — from the standard published validation research for a comparable
-// 1-5 self-report grit scale. Our own 12-item instrument uses different item wording,
-// so this is presented as a general-population reference point, not an exact match.
-export const GRIT_WORLD_BENCHMARK = {
-  average: 3.4,
-  scaleMax: 5,
-  sampleSize: 1554,
-  citation: "Duckworth & Quinn (2009), Journal of Personality Assessment — adults aged 25+",
-};
-
-export interface GritBenchmark {
-  yourScore: number;
-  scaleMax: number;
-  studyPeerAverage: number | null;
-  studyPeerCount: number;
-  worldAverage: number;
-  worldSampleSize: number;
-  worldCitation: string;
-}
-
 export interface GritHook {
-  id: "persistence-paradox" | "invisible-work" | "ai-transition-gap";
+  id: "adaptive-advantage" | "persistence-paradox" | "steadfast-edge" | "spirited-drive";
   heading: string;
   stat: string;
   pivot: string;
-  benchmark: GritBenchmark;
+  /** Full MDGS facet breakdown (your score vs. live peer average), sorted highest-first. */
+  facets: GritFacetScore[];
 }
 
 /**
+ * facets: the participant's real MDGS facet breakdown, already computed against live
+ * in-study peers (see computeGritFacetBreakdown in scoring.ts) and sorted by the
+ * participant's own score, highest first. No external "world average" is used — the
+ * Multi-Dimensional Grit Scale (Singh & Chukkali, 2021) is a recently validated,
+ * India-specific instrument with no established population norms yet (unlike
+ * Duckworth's older, structurally different Grit-S), so an outside benchmark would
+ * misrepresent a different construct as equivalent. Live in-study peer data is the
+ * only honest comparison available.
+ *
  * peerTechnostress: computed across everyone (not just fully-completed participants) who
  * has answered the Technostress section, since most peers won't have finished the whole
  * assessment yet when this fires. Real accumulated data only — never a placeholder number.
- *
- * yourGritMean / peerGrit: the participant's own (real, computed) 12-item Grit mean and
- * the live average across study peers who've reached Grit so far — used to build the
- * "how do you compare" benchmark attached to every branch below, alongside the cited
- * external world-average reference point.
  */
-export function chooseGritHook(
-  answers: Record<string, number>,
-  peerTechnostress: PeerStat,
-  yourGritMean: number,
-  peerGrit: PeerStat
-): GritHook {
-  const effort = meanOf(EFFORT_ITEMS, answers);
-  const initiative = meanOf(INITIATIVE_ITEMS, answers);
-  const steadfastness = meanOf(STEADFASTNESS_ITEMS, answers);
-  const top = Math.max(effort, initiative, steadfastness);
+export function chooseGritHook(facets: GritFacetScore[], peerTechnostress: PeerStat): GritHook {
+  const top = facets[0]?.id;
 
-  const benchmark: GritBenchmark = {
-    yourScore: Math.round(yourGritMean * 100) / 100,
-    scaleMax: 5,
-    studyPeerAverage: peerGrit.count >= 3 && peerGrit.average !== null ? Math.round(peerGrit.average * 100) / 100 : null,
-    studyPeerCount: peerGrit.count,
-    worldAverage: GRIT_WORLD_BENCHMARK.average,
-    worldSampleSize: GRIT_WORLD_BENCHMARK.sampleSize,
-    worldCitation: GRIT_WORLD_BENCHMARK.citation,
-  };
-
-  if (top === steadfastness && peerTechnostress.average !== null && peerTechnostress.count >= 3) {
+  if (top === "steadfastness" && peerTechnostress.average !== null && peerTechnostress.count >= 3) {
     return {
-      id: "ai-transition-gap",
+      id: "steadfast-edge",
       heading: "Here's something interesting…",
-      stat: `Your steadfastness reads rock-solid — you don't rattle easily under pressure. But here's a pattern showing up across the ${peerTechnostress.count} peers who've reached the Technostress section so far: even people who rate themselves as highly resilient still report real strain from workplace technology, averaging ${peerTechnostress.average.toFixed(2)} / 5.0. Resilience doesn't seem to fully cancel out the overload.`,
+      stat: `Your steadfastness reads rock-solid — rejection and setbacks don't derail you, and you hold onto a clear sense of purpose even when things look hopeless. But here's a pattern showing up across the ${peerTechnostress.count} peers who've reached the Technostress section so far: even people who rate themselves as highly resilient still report real strain from workplace technology, averaging ${peerTechnostress.average.toFixed(2)} / 5.0. Resilience doesn't seem to fully cancel out the overload.`,
       pivot:
         "We want to find out if that holds for you too — whether steadiness acts as a shield, or whether the pace of technology gets through regardless of how tough you are. Let's look at your actual task execution next.",
-      benchmark,
+      facets,
     };
   }
 
-  if (top === effort) {
+  if (top === "adaptability") {
+    return {
+      id: "adaptive-advantage",
+      heading: "You're highly adaptable — but is it translating to impact?",
+      stat: "Your standout trait is adaptability — you monitor yourself, learn fast from mistakes, and put in the work to adjust course. That's a distinctly different profile from rigid persistence, and it's closer to what researchers studying Indian IT professionals call jugaad: flexible, resourceful problem-solving rather than stubbornly pushing on with a plan that isn't working. You treat technological shifts as puzzles rather than threats.",
+      pivot:
+        "But having the psychological capacity to adapt is only half the equation. The next step is seeing how this internal resilience actually translates into your daily execution and collaboration.",
+      facets,
+    };
+  }
+
+  if (top === "perseveranceOfEffort") {
     return {
       id: "persistence-paradox",
       heading: "Here's something interesting…",
-      stat: "You lean heavily on effort and hard work to reach your goals. It's a well-documented pattern in software engineering that pure persistence can backfire — developers who push through on effort alone are more prone to getting stuck in long, low-yield debugging loops that quietly drain their focus for the rest of the day.",
+      stat: "You lean heavily on sustained effort — stepping outside your comfort zone and pushing through obstacles rather than around them. It's a well-documented pattern that pure persistence can backfire when it isn't paired with knowing when to change approach, leaving people stuck in long, low-yield loops that quietly drain their focus.",
       pivot:
-        "The difference between burning out and staying sharp usually comes down to whether that effort is paired with adaptive performance — knowing when to push and when to change approach. Let's look at your actual execution style next.",
-      benchmark,
+        "The difference between burning out and staying sharp usually comes down to whether that effort is paired with adaptive performance. Let's look at your actual execution style next.",
+      facets,
     };
   }
 
-  if (top === initiative) {
-    return {
-      id: "invisible-work",
-      heading: "Here's something interesting…",
-      stat: "Your initiative and adaptability stand out. People with this profile often end up carrying a lot of \"invisible work\" — fixing broken pipelines, mentoring juniors, untangling technical debt — the kind of contribution that rarely shows up on a sprint board.",
-      pivot:
-        "Traditional performance reviews usually miss this entirely. Next, we want to measure the real balance between your visible technical output and the invisible glue work you provide your team.",
-      benchmark,
-    };
-  }
-
-  // Steadfastness highest, but not enough peer Technostress data yet for the specific stat.
+  // Spirited Initiative highest — staying alert and pushing forward through frustration/distress.
   return {
-    id: "ai-transition-gap",
+    id: "spirited-drive",
     heading: "Here's something interesting…",
-    stat: "Your steadfastness reads rock-solid — you don't rattle easily under pressure. Research on IT professionals consistently finds that this kind of resilience doesn't fully shield people from the strain of constant technological change; the two tend to run somewhat independently.",
-    pivot: "We want to find out if that holds for you too. Let's look at your actual task execution next.",
-    benchmark,
+    stat: "You stay alert and keep moving even in the middle of difficult, high-pressure situations — pushing through frustration rather than freezing up or disengaging. People with this profile often end up absorbing a disproportionate share of the pressure during a crunch, precisely because they're the ones who don't flinch.",
+    pivot:
+      "That's valuable, but it's also easy for organizations to take for granted. Next, we want to measure how that shows up in your actual task execution and in the support you give your team.",
+    facets,
   };
 }
 
@@ -143,8 +108,8 @@ interface PeerPercentile {
  * yet, rather than inventing a number.
  */
 export function choosePerformanceHook(answers: Record<string, number>, contextualPercentile: PeerPercentile): PerformanceHook {
-  const effort = pctOf5(meanOf(EFFORT_ITEMS, answers));
-  const initiative = pctOf5(meanOf(INITIATIVE_ITEMS, answers));
+  const perseveranceOfEffort = pctOf5(meanOf(facetItems("perseveranceOfEffort"), answers));
+  const adaptability = pctOf5(meanOf(facetItems("adaptability"), answers));
   const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
   const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
 
@@ -162,7 +127,7 @@ export function choosePerformanceHook(answers: Record<string, number>, contextua
     };
   }
 
-  if (effort >= HIGH && taskPerformance >= HIGH) {
+  if (perseveranceOfEffort >= HIGH && taskPerformance >= HIGH) {
     return {
       id: "effort-to-impact",
       heading: "Here's something interesting…",
@@ -172,7 +137,7 @@ export function choosePerformanceHook(answers: Record<string, number>, contextua
     };
   }
 
-  if (initiative >= HIGH && taskPerformance >= HIGH) {
+  if (adaptability >= HIGH && taskPerformance >= HIGH) {
     return {
       id: "resilience-roi",
       heading: "Here's something interesting…",

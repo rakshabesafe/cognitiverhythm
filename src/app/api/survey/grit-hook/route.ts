@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getValidParticipantId } from "@/lib/auth/session";
 import { chooseGritHook } from "@/lib/survey/hooks";
-import { computeModuleMeanForAnswers, computeModulePeerStat } from "@/lib/survey/scoring";
+import { computeGritFacetBreakdown, computeModulePeerStat } from "@/lib/survey/scoring";
 
 export async function GET() {
   const userId = await getValidParticipantId();
@@ -14,8 +14,7 @@ export async function GET() {
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
   const peerTechnostress = computeModulePeerStat("technostress", peers);
-  const peerGrit = computeModulePeerStat("grit", peers);
-  const yourGritMean = computeModuleMeanForAnswers("grit", responses.answers) ?? 0;
+  const facets = computeGritFacetBreakdown(responses.answers, peers);
 
-  return NextResponse.json(chooseGritHook(responses.answers, peerTechnostress, yourGritMean, peerGrit));
+  return NextResponse.json(chooseGritHook(facets, peerTechnostress));
 }

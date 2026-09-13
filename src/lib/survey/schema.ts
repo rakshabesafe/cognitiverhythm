@@ -173,6 +173,22 @@ export const DEMOGRAPHICS: DemographicsModule = {
   ],
 };
 
+export interface GritFacet {
+  id: "perseveranceOfEffort" | "adaptability" | "spiritedInitiative" | "steadfastness";
+  label: string;
+  items: string[];
+}
+
+// The four official dimensions of the Multi-Dimensional Grit Scale (MDGS; Singh &
+// Chukkali, 2021) — the validated instrument this study's Grit module implements.
+// This is the real scored sub-structure of the construct, not a presentation heuristic.
+export const GRIT_FACETS: GritFacet[] = [
+  { id: "perseveranceOfEffort", label: "Perseverance of Effort", items: ["G1", "G2", "G3"] },
+  { id: "adaptability", label: "Adaptability to Situations", items: ["G4", "G5", "G6"] },
+  { id: "spiritedInitiative", label: "Spirited Initiative", items: ["G7", "G8", "G9"] },
+  { id: "steadfastness", label: "Steadfastness in Adverse Situations", items: ["G10", "G11", "G12"] },
+];
+
 export const LIKERT_MODULES: LikertModule[] = [
   {
     id: "grit",

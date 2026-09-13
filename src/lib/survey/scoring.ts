@@ -1,4 +1,4 @@
-import { isDemographicsComplete, LIKERT_MODULES, SCALES, type LikertModule } from "./schema";
+import { GRIT_FACETS, isDemographicsComplete, LIKERT_MODULES, SCALES, type LikertModule } from "./schema";
 
 export type Band = "Low" | "Moderate" | "High";
 export type Direction = "positive" | "negative";
@@ -108,6 +108,45 @@ export function percentileRank(mine: number, peerMeans: number[]): number | null
 export function computeModuleMeanForAnswers(moduleId: string, answers: Record<string, number>): number | null {
   const mod = LIKERT_MODULES.find((m) => m.id === moduleId);
   return mod ? moduleMean(mod, answers) : null;
+}
+
+function facetMean(items: string[], answers: Record<string, number>): number | null {
+  const values = items.map((code) => answers[code]).filter((v): v is number => typeof v === "number");
+  return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+}
+
+export interface GritFacetScore {
+  id: string;
+  label: string;
+  yourScore: number;
+  peerAverage: number | null;
+  peerCount: number;
+}
+
+/**
+ * Full MDGS facet breakdown for the participant vs. their live in-study peers, sorted by
+ * the participant's own score (highest first). peerAverage stays null until at least 3
+ * peers have answered that facet's items — no world/external norm is used (see hooks.ts).
+ */
+export function computeGritFacetBreakdown(
+  answers: Record<string, number>,
+  peerResponses: { answers: Record<string, number> }[]
+): GritFacetScore[] {
+  return GRIT_FACETS.map((facet) => {
+    const yourScore = facetMean(facet.items, answers) ?? 0;
+    const peerMeans = peerResponses
+      .map((r) => facetMean(facet.items, r.answers))
+      .filter((m): m is number => m !== null);
+    const peerAverage =
+      peerMeans.length >= 3 ? peerMeans.reduce((a, b) => a + b, 0) / peerMeans.length : null;
+    return {
+      id: facet.id,
+      label: facet.label,
+      yourScore: Math.round(yourScore * 100) / 100,
+      peerAverage: peerAverage !== null ? Math.round(peerAverage * 100) / 100 : null,
+      peerCount: peerMeans.length,
+    };
+  }).sort((a, b) => b.yourScore - a.yourScore);
 }
 
 export interface BenchmarkRow {

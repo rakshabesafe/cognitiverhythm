@@ -21,9 +21,9 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        setError(data?.error ?? "Something went wrong. Please try again.");
         return;
       }
       router.push("/consent");

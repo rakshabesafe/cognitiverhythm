@@ -57,9 +57,9 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
           router.refresh();
           return;
         }
-        const data = await res.json();
-        if (!res.ok) {
-          showToast(data.error ?? "Could not save your answer.", "error");
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          showToast(data?.error ?? "Could not save your answer. Please try again.", "error");
           return;
         }
         showToast("Saved");

@@ -48,9 +48,9 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
           router.refresh();
           return null;
         }
-        const data = await res.json();
-        if (!res.ok) {
-          showToast(data.error ?? "Could not save.", "error");
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          showToast(data?.error ?? "Could not save. Please try again.", "error");
           return null;
         }
         showToast("Saved");
