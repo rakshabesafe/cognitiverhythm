@@ -126,6 +126,23 @@ const GRIT_FACET_REFERENCE: Record<string, number> = {
 };
 export const GRIT_OVERALL_REFERENCE = 3.93;
 
+/**
+ * A 5-step read of a score against a comparison point (a reference/typical score, or a
+ * live peer average) — used to pick which of several hand-written, always-positive
+ * interpretations to show for a given dimension. Never maps to language implying a score
+ * is bad; only to how much headroom is being highlighted.
+ */
+export type ScoreTier = "well-below" | "below" | "typical" | "above" | "well-above";
+
+export function tierFor(yourScore: number, comparisonPoint: number): ScoreTier {
+  const diff = yourScore - comparisonPoint;
+  if (diff <= -0.75) return "well-below";
+  if (diff <= -0.25) return "below";
+  if (diff < 0.25) return "typical";
+  if (diff < 0.75) return "above";
+  return "well-above";
+}
+
 export interface GritFacetScore {
   id: string;
   label: string;

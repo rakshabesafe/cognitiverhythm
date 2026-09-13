@@ -24,17 +24,24 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
+// A small, serverless-appropriate pool. The driver's default (maxPoolSize: 100) assumes
+// one long-lived server process; on Vercel, every concurrent function instance gets its
+// own client and its own pool, so the default multiplies out fast and can overwhelm a
+// shared/free Atlas cluster's connection limit — surfacing as a confusing TLS handshake
+// error ("tlsv1 alert internal error") rather than a clear "too many connections" one.
+const CLIENT_OPTIONS = { maxPoolSize: 5, minPoolSize: 0 };
+
 let cachedClientPromise: Promise<MongoClient> | undefined;
 
 function getClientPromise(): Promise<MongoClient> {
   if (process.env.NODE_ENV === "development") {
     if (!global._mongoClientPromise) {
-      global._mongoClientPromise = new MongoClient(getUri()).connect();
+      global._mongoClientPromise = new MongoClient(getUri(), CLIENT_OPTIONS).connect();
     }
     return global._mongoClientPromise;
   }
   if (!cachedClientPromise) {
-    cachedClientPromise = new MongoClient(getUri()).connect();
+    cachedClientPromise = new MongoClient(getUri(), CLIENT_OPTIONS).connect();
   }
   return cachedClientPromise;
 }

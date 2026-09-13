@@ -3,7 +3,16 @@
 // study's own theoretical path: traits (Grit) → environment (Stress) → mindset
 // (Confidence) → output (Technology & Team).
 import { GRIT_FACETS } from "./schema";
-import { bandForModule, HIGH, type Band, type GritFacetScore, type PeerStat, type SectionScore } from "./scoring";
+import {
+  bandForModule,
+  HIGH,
+  tierFor,
+  type Band,
+  type GritFacetScore,
+  type PeerStat,
+  type ScoreTier,
+  type SectionScore,
+} from "./scoring";
 
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
 const CONTEXTUAL_PERFORMANCE_ITEMS = ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CP7", "CP8"];
@@ -25,13 +34,118 @@ function pctOf5(mean: number): number {
 
 // --- 1. Grit Profile → pivots into Stress ------------------------------------
 
+interface GritFacetCopy {
+  /** Plain-language definition of what this dimension actually measures. */
+  meaning: string;
+  /** One always-positive interpretation per gradation, keyed against the reference score. */
+  tiers: Record<ScoreTier, string>;
+}
+
+// Every tier is written to sound encouraging — even "well-below" is framed as fast,
+// available upside rather than a deficiency, per product direction: never sound negative
+// about a score, always give it a positive spin, regardless of where it actually lands.
+const GRIT_FACET_COPY: Record<string, GritFacetCopy> = {
+  perseveranceOfEffort: {
+    meaning:
+      "How much steady effort you put toward a goal — pushing through obstacles and sticking with something rather than giving up on it.",
+    tiers: {
+      "well-above":
+        "You bring an exceptional amount of sustained effort to your goals — you keep going long after most people would ease off, and that kind of persistence compounds into real results over time.",
+      above:
+        "You bring strong, steady effort to your goals — you push through obstacles rather than stalling out, which is a real asset.",
+      typical:
+        "You bring a solid, dependable level of effort to your goals — right in line with most professionals in this field, and a good foundation to build on.",
+      below:
+        "You tend to pace your effort carefully rather than pushing all-out on everything — a smart instinct in a demanding job. An easy win: pick one or two goals a month to deliberately push a little harder on.",
+      "well-below":
+        "You're currently more selective about where you invest sustained effort than most — which means there's fast, easy upside available: even small increases in follow-through here tend to show up quickly in results.",
+    },
+  },
+  adaptability: {
+    meaning:
+      "How well you notice when something isn't working, learn from it, and change your approach — rather than sticking with a plan that's stopped serving you.",
+    tiers: {
+      "well-above":
+        "You're exceptionally adaptable — you read situations quickly and change course without hesitation. That's one of the rarer, more valuable traits in fast-moving technical work.",
+      above:
+        "You adapt well — you notice when an approach isn't working and adjust course, which keeps you effective as things shift around you.",
+      typical: "You adapt about as well as most professionals in this field — a solid, functional level of flexibility.",
+      below:
+        "You tend to give an approach a bit longer before adjusting course, which often reflects real conviction in your plan. An easy add: build a short checkpoint into big tasks to catch course-corrections even sooner.",
+      "well-below":
+        "Right now you lean toward staying the course rather than pivoting quickly — a real strength when a plan needs to be seen through. Adding a habit of briefly re-checking your approach partway through is a fast way to build more adaptability on top of that.",
+    },
+  },
+  spiritedInitiative: {
+    meaning:
+      "How alert and proactive you stay in frustrating or high-pressure moments — pushing forward instead of freezing up or disengaging.",
+    tiers: {
+      "well-above":
+        "You have an exceptional ability to stay engaged under real pressure — you push through frustration rather than disengaging, a standout trait in demanding environments.",
+      above: "You stay alert and proactive under pressure more than most — you push through frustrating moments instead of stalling out.",
+      typical: "You handle pressure and frustration about as well as most professionals in this field — a solid, workable baseline.",
+      below:
+        "Under real pressure, you tend to step back and reset before pushing forward again — often a healthy form of self-protection. A small, easy shift: give yourself one extra deliberate minute before stepping away, and see how often you push through anyway.",
+      "well-below":
+        "You currently favor stepping back when frustration builds — a genuinely reasonable instinct. The fastest upside here is small, low-stakes practice at staying engaged just a little longer before disengaging.",
+    },
+  },
+  steadfastness: {
+    meaning:
+      "How strongly you hold on to your sense of purpose and keep going through setbacks or rejection, even when a situation looks hopeless.",
+    tiers: {
+      "well-above":
+        "Your steadfastness is exceptional — rejection and setbacks barely register against your sense of purpose, giving you unusual staying power in long, difficult efforts.",
+      above: "You hold onto your sense of purpose well through setbacks — more than most, you keep going instead of being derailed by a difficult patch.",
+      typical: "You hold up under setbacks about as well as most professionals in this field — a solid, dependable baseline of resolve.",
+      below:
+        "Setbacks and rejection shake your resolve a little more than average — a very human, honest response. An easy anchor: keep one clear reminder of your \"why\" somewhere visible for the moments that test it.",
+      "well-below":
+        "Right now, difficult stretches affect your sense of purpose more than they do for most people — which just means this is the area with the fastest potential gains. Even a small anchor, like a clear reason \"why\" or a person to check in with, tends to move this quickly.",
+    },
+  },
+};
+
+export interface GritFacetDescription {
+  id: string;
+  label: string;
+  meaning: string;
+  tier: ScoreTier;
+  description: string;
+}
+
+/** One graded, always-positive description per facet, in the same order as `facets`. */
+export function describeGritFacets(facets: GritFacetScore[]): GritFacetDescription[] {
+  return facets.map((f) => {
+    const copy = GRIT_FACET_COPY[f.id];
+    const tier = tierFor(f.yourScore, f.referenceAverage);
+    return { id: f.id, label: f.label, meaning: copy.meaning, tier, description: copy.tiers[tier] };
+  });
+}
+
+const OVERALL_GRIT_SUMMARY: Record<ScoreTier, string> = {
+  "well-above": "Across all four dimensions, your overall grit score is exceptionally high — a genuine strength to lean on.",
+  above: "Across all four dimensions, your overall grit score comes in above the typical range — a real strength to build from.",
+  typical: "Across all four dimensions, your overall grit score lands right around the typical range for this field — a solid, dependable foundation.",
+  below:
+    "Across all four dimensions, your overall grit score is a touch below the typical range — which mostly means there's meaningful, fast-to-unlock room to grow, especially in the areas below.",
+  "well-below":
+    "Across all four dimensions, your overall grit score has real room to grow — and that's genuinely good news, since this kind of trait responds quickly to small, deliberate practice.",
+};
+
+/** Graded, always-positive one-liner for the overall (all-4-facet-average) grit score. */
+export function overallGritSummary(overallYourScore: number, overallReference: number): string {
+  return OVERALL_GRIT_SUMMARY[tierFor(overallYourScore, overallReference)];
+}
+
 export interface GritHook {
-  id: "adaptive-advantage" | "persistence-paradox" | "steadfast-edge" | "spirited-drive";
   heading: string;
   stat: string;
   pivot: string;
   /** Full MDGS facet breakdown (your score, reference average, live peer average). */
   facets: GritFacetScore[];
+  /** Graded, plain-language interpretation of every facet — not just the highest one. */
+  facetDescriptions: GritFacetDescription[];
 }
 
 /**
@@ -43,54 +157,45 @@ export interface GritHook {
  * cited by name in the UI. The live peerAverage stays separate and null until at least 3
  * real in-study peers have answered that facet, so the two numbers are never conflated.
  *
+ * "Highest of your own four facets" is not the same as "above average" — someone's top
+ * facet can still sit below the typical score (see facetDescriptions, which grades each
+ * facet against its own reference point rather than against the participant's other
+ * facets). The heading below only ever claims relative standing within their own profile,
+ * never absolute strength, so it can't contradict the graded descriptions underneath it.
+ *
  * peerTechnostress: computed across everyone (not just fully-completed participants) who
  * has answered the Technostress section, since most peers won't have finished the whole
  * assessment yet when this fires. Real accumulated data only — never a placeholder number.
  */
 export function chooseGritHook(facets: GritFacetScore[], peerTechnostress: PeerStat): GritHook {
-  const top = facets[0]?.id;
+  const top = facets[0];
+  const facetDescriptions = describeGritFacets(facets);
 
-  if (top === "steadfastness" && peerTechnostress.average !== null && peerTechnostress.count >= 3) {
-    return {
-      id: "steadfast-edge",
-      heading: "Your foundation is steadfastness.",
-      stat: `Your steadfastness reads rock-solid — rejection and setbacks don't derail you, and you hold onto a clear sense of purpose even when things look hopeless. But here's a pattern showing up across the ${peerTechnostress.count} peers who've reached the Technostress section so far: even people who rate themselves as highly resilient still report real strain from workplace technology, averaging ${peerTechnostress.average.toFixed(2)} / 5.0. Resilience doesn't seem to fully cancel out the overload.`,
-      pivot:
-        "Resilience doesn't exist in a vacuum. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit, and whether steadiness actually shields you from it.",
-      facets,
-    };
-  }
-
-  if (top === "adaptability") {
-    return {
-      id: "adaptive-advantage",
-      heading: "Your foundation is adaptability.",
-      stat: "Your standout trait is adaptability — you monitor yourself, learn fast from mistakes, and put in the work to adjust course. That's a distinctly different profile from rigid persistence, and it's closer to what's often called a jugaad mindset: flexible, resourceful problem-solving rather than stubbornly pushing on with a plan that isn't working. You treat technological shifts as puzzles rather than threats.",
-      pivot:
-        "High adaptability is a massive asset — but resilience doesn't exist in a vacuum. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
-      facets,
-    };
-  }
-
-  if (top === "perseveranceOfEffort") {
-    return {
-      id: "persistence-paradox",
-      heading: "Your foundation is perseverance of effort.",
-      stat: "You lean heavily on sustained effort — stepping outside your comfort zone and pushing through obstacles rather than around them. It's a well-documented pattern that pure persistence can backfire when it isn't paired with knowing when to change approach, leaving people stuck in long, low-yield loops that quietly drain their focus.",
-      pivot:
-        "Whether that effort sustains you or drains you depends heavily on what you're pushing against. Next, let's measure the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
-      facets,
-    };
-  }
-
-  // Spirited Initiative highest — staying alert and pushing forward through frustration/distress.
-  return {
-    id: "spirited-drive",
-    heading: "Your foundation is spirited initiative.",
-    stat: "You stay alert and keep moving even in the middle of difficult, high-pressure situations — pushing through frustration rather than freezing up or disengaging. People with this profile often end up absorbing a disproportionate share of the pressure during a crunch, precisely because they're the ones who don't flinch.",
-    pivot:
+  // None of these claim an absolute strength level — that would risk contradicting a
+  // facet's graded description above if the participant's relative-highest still sits
+  // below the typical range. They only pose a forward-looking question.
+  const pivots: Record<string, string> = {
+    steadfastness:
+      "Resilience doesn't exist in a vacuum, though — it's shaped by what's pushing against it. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+    adaptability:
+      "But knowing how to adjust course is only half the picture — the other half is how much friction you're actually adjusting against. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+    perseveranceOfEffort:
+      "Whether that effort sustains you or drains you depends heavily on what you're pushing against. Next, let's measure the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+    spiritedInitiative:
       "Which raises the obvious question: how much pressure are you actually absorbing? Next, let's measure the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+  };
+
+  let pivot = pivots[top?.id ?? ""] ?? pivots.adaptability;
+  if (top?.id === "steadfastness" && peerTechnostress.average !== null && peerTechnostress.count >= 3) {
+    pivot = `${pivot} For context, across the ${peerTechnostress.count} peers who've reached the Technostress section so far, even highly resilient people still report real strain from workplace technology, averaging ${peerTechnostress.average.toFixed(2)} / 5.0 — resilience doesn't seem to fully cancel out the overload.`;
+  }
+
+  return {
+    heading: top ? `Your strongest dimension right now is ${top.label}.` : "Here's your grit profile.",
+    stat: "Grit isn't one trait — it's four. Here's what each dimension actually measures, and what your score on it means.",
+    pivot,
     facets,
+    facetDescriptions,
   };
 }
 

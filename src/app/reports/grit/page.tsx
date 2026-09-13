@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { chooseGritHook } from "@/lib/survey/hooks";
+import { chooseGritHook, overallGritSummary } from "@/lib/survey/hooks";
 import { computeGritFacetBreakdown, computeModulePeerStat, GRIT_OVERALL_REFERENCE } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
+import { FacetDescriptions } from "@/components/survey/FacetDescriptions";
 import { ReportShell } from "@/components/survey/ReportShell";
 import { ScoreTable } from "@/components/survey/ScoreTable";
 
@@ -33,8 +34,9 @@ export default async function GritReportPage() {
           referenceAverage: f.referenceAverage,
           max: 5,
         }))}
-        footnote={`Your overall grit score is ${overallYourScore.toFixed(2)} / 5 — the typical score is ${GRIT_OVERALL_REFERENCE.toFixed(2)} / 5.`}
+        footnote={`${overallGritSummary(overallYourScore, GRIT_OVERALL_REFERENCE)} (${overallYourScore.toFixed(2)} / 5, typical is ${GRIT_OVERALL_REFERENCE.toFixed(2)} / 5.)`}
       />
+      <FacetDescriptions facets={hook.facetDescriptions} />
     </ReportShell>
   );
 }
