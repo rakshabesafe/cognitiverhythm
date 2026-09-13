@@ -8,7 +8,6 @@ import {
   type Band,
   type GritFacetScore,
   type ScoreTier,
-  type SectionScore,
 } from "./scoring";
 
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
@@ -439,97 +438,319 @@ export function chooseEnergyAllocationHook(
 }
 
 // --- 3. Stress Profile → pivots into Confidence -------------------------------
+//
+// Maps Operational Friction (Technostress) against Existential Threat (AI Job Anxiety) —
+// two different sources of strain that call for different responses, so collapsing them
+// into one generic "stress level" would lose the most actionable part of the read. Each
+// axis uses this app's usual pct-of-own-scale HIGH threshold (bandForModule/bandForScore)
+// rather than a shared raw-number cutoff, since Technostress sits on a 5-point scale and
+// AI Job Anxiety on a 7-point one — a raw "3" means a very different thing on each.
+
+/** A single per-construct card's insight — shared shape for both Stress and Confidence. */
+export interface RowInsight {
+  id: string;
+  emoji: "🔴" | "🟡" | "🟢";
+  band: Band;
+  text: string;
+}
+
+// Technostress/AI Anxiety are "negative"-direction constructs (High = bad = red); Self-
+// Efficacy is "positive"-direction (High = good = green) — same distinction scoring.ts's
+// DIRECTIONS map makes elsewhere. Using one map for both would tell someone their high
+// self-confidence is a red flag, which is simply wrong, not just a tone issue.
+const NEGATIVE_ROW_EMOJI: Record<Band, "🔴" | "🟡" | "🟢"> = { High: "🔴", Moderate: "🟡", Low: "🟢" };
+const POSITIVE_ROW_EMOJI: Record<Band, "🔴" | "🟡" | "🟢"> = { High: "🟢", Moderate: "🟡", Low: "🔴" };
+
+const STRESS_ROW_COPY: Record<string, Record<Band, string>> = {
+  Overload: {
+    High: "You're in a perpetual state of transition and time pressure.",
+    Moderate: "You feel the pace, but it isn't yet overwhelming.",
+    Low: "The pace of change and workload feels manageable to you.",
+  },
+  Complexity: {
+    High: "You're spending real energy just trying to understand the tools you're required to use.",
+    Moderate: "New technology takes some effort to pick up, but it isn't a major obstacle.",
+    Low: "You understand the tech; the difficulty isn't the issue.",
+  },
+  Uncertainty: {
+    High: "Constant, unpredictable change in your tools and systems is a real source of strain.",
+    Moderate: "Things change fairly often, but at a pace you can mostly keep up with.",
+    Low: "Your tools and systems feel stable enough to plan around.",
+  },
+  "ai-anxiety": {
+    High: "You perceive AI as a direct threat to your professional relevance.",
+    Moderate: "AI's rise registers as a real concern, without dominating how you think about your career.",
+    Low: "You feel secure in your role alongside AI.",
+  },
+};
+
+/** id: "Overload" | "Complexity" | "Uncertainty" | "ai-anxiety" — matches STRESS_ROW_COPY's keys. */
+export function describeStressRow(id: string, band: Band): RowInsight {
+  return { id, emoji: NEGATIVE_ROW_EMOJI[band], band, text: STRESS_ROW_COPY[id][band] };
+}
 
 export interface StressHook {
-  band: Band;
+  id: "pressure-cooker" | "obsolescence-spiral" | "existential-wait" | "shielded-operator";
+  archetypeName: string;
   heading: string;
-  stat: string;
+  contextLabel: string;
+  contextText: string;
+  meaningLabel: string;
+  meaningParagraphs: string[];
   pivot: string;
 }
 
-/**
- * sections: the Technostress sub-dimension breakdown (Overload / Complexity / Uncertainty),
- * sorted highest-first, so the copy can name whichever one is actually driving their load.
- */
-export function chooseStressHook(answers: Record<string, number>, sections: SectionScore[]): StressHook {
-  const technostress = bandForModule("technostress", answers);
-  const aiAnxiety = bandForModule("ai-anxiety", answers);
-  const topSection = sections[0]?.label;
-  const driver = topSection ? ` The biggest single driver is ${topSection.toLowerCase()}.` : "";
+function pressureCookerContext(orgType: string | undefined): string {
+  if (orgType === "Product") {
+    return "In product companies, the pressure usually isn't client SLAs — it's release velocity. Your high techno-overload reads as a structural feature of how fast your organization ships, not a personal time-management failure.";
+  }
+  return "Operating in the global delivery model common to service-based IT companies inherently normalizes boundary-blurring and tight client SLAs. Your high techno-overload is a structural feature of your organization's business model, not a personal time-management failure.";
+}
 
-  if (technostress === "High" || aiAnxiety === "High") {
+function existentialWaitContext(orgType: string | undefined): string {
+  if (orgType === "Product") {
+    return "In product firms, the pressure isn't usually client hours — it's innovation velocity. Your anxiety likely stems from watching AI get integrated into your core product architecture, forcing a perpetual state of transition even while your day-to-day workload stays manageable.";
+  }
+  return "In service-delivery organizations, AI anxiety often centers less on today's ticket queue and more on how AI could reshape the billable-hours model itself — which explains why your day-to-day friction reads low while this concern persists.";
+}
+
+function obsolescenceSpiralContext(ageGroup: string | undefined): string {
+  if (ageGroup === "18 to 28") {
+    return "As a younger engineer, you're facing a unique paradox: AI is automating the exact routine coding and testing tasks entry-level engineers typically use to build foundational mastery. Your anxiety is valid — the stepping stones of your career path are shifting under you.";
+  }
+  if (ageGroup === "35 and above") {
+    return "With your seniority, this concern is less about core coding ability and more about staying strategically relevant as the tools around you change faster than most organizations can absorb.";
+  }
+  return "At this stage of your career, you've built real technical grounding — so this isn't about foundational skills. It more likely reflects watching the tools and workflows you've mastered get rapidly reshaped by AI, with the shape of your next few years genuinely unclear.";
+}
+
+/**
+ * demographics: orgType personalizes Pressure Cooker and Existential Wait (their strain
+ * has a different structural source in a Product vs. a Service-delivery organization);
+ * ageGroup personalizes Obsolescence Spiral (the same double-threat reading means
+ * something different for someone still building foundational skills vs. someone senior).
+ * gritBand: the participant's own Grit reading (bandForModule("grit", answers) from the
+ * caller) — referenced only in the Obsolescence Spiral pivot, which poses the "unstoppable
+ * force meets immovable object" cliffhanger explicitly in terms of their own grit score,
+ * tying back to the first report in the arc.
+ */
+export function chooseStressHook(
+  answers: Record<string, number>,
+  demographics: Record<string, string>,
+  gritBand: Band
+): StressHook {
+  const technostressHigh = bandForModule("technostress", answers) === "High";
+  const aiAnxietyHigh = bandForModule("ai-anxiety", answers) === "High";
+
+  if (technostressHigh && !aiAnxietyHigh) {
     return {
-      band: "High",
-      heading: "This is the cognitive weight you're currently carrying.",
-      stat: `You're absorbing a high amount of structural pressure right now.${driver} That's not a personal shortcoming — it's a signal that the rate of technological change around you currently exceeds what's comfortable to absorb, and it's exactly the kind of demand that competes for the same mental budget your deep work needs.`,
+      id: "pressure-cooker",
+      archetypeName: "The Pressure Cooker",
+      heading: "Your Stress Profile: The Pressure Cooker",
+      contextLabel: "The context of your environment:",
+      contextText: pressureCookerContext(demographics.orgType),
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        "The friction here is strictly operational, not existential — you're not worried AI is coming for your job, you're worn down by the sheer volume of updates, tight deadlines, and constant change.",
+        "That's a meaningfully different, and more directly solvable, problem than career-threat anxiety: it responds to workload and process changes rather than requiring you to resolve how you feel about AI itself.",
+      ],
       pivot:
-        "When demands run this high, some engineers lose their confidence, while others rely on their grit to push through. Next, let's measure your occupational self-efficacy — to see whether this stress is depleting your confidence, or whether you're holding the line.",
+        "The friction is real, but it's environmental, not a reflection of your ability to keep up. Next, let's measure your Occupational Self-Efficacy to see how well your confidence is holding up under this operational load.",
     };
   }
 
-  if (technostress === "Moderate" || aiAnxiety === "Moderate") {
+  if (technostressHigh && aiAnxietyHigh) {
+    const pivot =
+      gritBand === "High"
+        ? "High grit. High overload. High AI anxiety. What happens when an unstoppable force — this much technostress — meets an immovable object — your own Multidimensional Grit? The deciding factor is your Occupational Self-Efficacy: your core belief in your ability to survive this transition. Let's measure it next."
+        : "That's a lot to carry at once. Next, let's measure your Occupational Self-Efficacy — your core belief in your ability to survive this transition — to see how it's holding up.";
     return {
-      band: "Moderate",
-      heading: "This is the cognitive weight you're currently carrying.",
-      stat: `You're carrying a moderate amount of structural pressure — noticeable, but not yet overwhelming.${driver} This is the range where the habits you build now determine whether it stays manageable or quietly climbs.`,
+      id: "obsolescence-spiral",
+      archetypeName: "The Obsolescence Spiral",
+      heading: "Your Stress Profile: The Obsolescence Spiral",
+      contextLabel: "The context of your career stage:",
+      contextText: obsolescenceSpiralContext(demographics.ageGroup),
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        "You're facing a double-threat: overwhelmed by current workload, and simultaneously concerned that the AI tools you're struggling to adopt will eventually replace you.",
+        "When extreme workload combines with job insecurity, Conservation of Resources theory describes this as a \"loss spiral\" — you're spending so much cognitive energy surviving your daily tickets that there's little bandwidth left to upskill and secure your future value.",
+      ],
+      pivot,
+    };
+  }
+
+  if (!technostressHigh && aiAnxietyHigh) {
+    return {
+      id: "existential-wait",
+      archetypeName: "The Existential Wait",
+      heading: "Your Stress Profile: The Existential Wait",
+      contextLabel: "The context of your environment:",
+      contextText: existentialWaitContext(demographics.orgType),
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        "Your day-to-day workload is genuinely manageable — but you're carrying a real cognitive burden about the future relevance of your skills as AI automates core technical tasks.",
+        "That's a different kind of weight than overload: quieter, but no less real, since there's no ticket queue to clear that makes it go away.",
+      ],
       pivot:
-        "Pressure at this level tends to be absorbed by confidence rather than resilience alone. Next, let's measure your occupational self-efficacy — the belief that you can handle what's coming — and see how well it's holding up.",
+        "A quiet weight is still a weight. Next, let's measure your Occupational Self-Efficacy to see whether your confidence in your own skills matches how manageable your day-to-day actually feels.",
     };
   }
 
   return {
-    band: "Low",
-    heading: "This is the cognitive weight you're currently carrying.",
-    stat: `Your readings come back light — the pace of workplace technology and the rise of AI aren't currently registering as threats to you.${driver} That's a genuinely valuable position, and rarer in this industry than you might expect.`,
+    id: "shielded-operator",
+    archetypeName: "The Shielded Operator",
+    heading: "Your Stress Profile: The Shielded Operator",
+    contextLabel: "The context of your environment:",
+    contextText:
+      "Right now, both the pace of change around you and your read on AI's impact on your career are registering as manageable — a genuinely valuable combination, and rarer in this industry than you might expect.",
+    meaningLabel: "What this means for you:",
+    meaningParagraphs: [
+      "You're operating in a low-friction environment. The structural demands on you are reasonable, and you feel secure in your role alongside AI.",
+      "Worth noting what's actually working here — it's easier to protect a good setup than to rebuild one once it slips.",
+    ],
     pivot:
-      "Low pressure and high confidence usually travel together — but not always. Next, let's measure your occupational self-efficacy and see whether your belief in your own abilities matches how little this pressure is getting to you.",
+      "Low pressure and high confidence usually travel together — but not always. Next, let's measure your Occupational Self-Efficacy and see whether your belief in your own abilities matches how little this pressure is getting to you.",
   };
 }
 
 // --- 4. Confidence Profile → pivots into the Full Combined Report -------------
+//
+// Maps Occupational Self-Efficacy against the Total Stress (Technostress + AI Anxiety)
+// uncovered in the previous report — this reveals whether the participant is in a "Gain
+// Spiral" (stress is generating mastery experiences) or a "Loss Spiral" (stress is eroding
+// confidence), per Conservation of Resources theory. "Total Stress" reads High if either
+// axis from the Stress report was High — matching how the Stress report itself treats them
+// as two independent, either-can-dominate sources of strain rather than averaging them
+// into one number.
+
+const CONFIDENCE_ROW_COPY: Record<Band, string> = {
+  High: "You possess exceptional confidence in your ability to solve technical problems and adapt to new systems.",
+  Moderate: "You generally trust your ability to handle what's in front of you, though it isn't unshakeable yet.",
+  Low: "Your belief in your own technical abilities is reading lower than your effort elsewhere would predict.",
+};
+
+/** Row insight for the single Occupational Self-Efficacy construct shown in this report. */
+export function describeConfidenceRow(band: Band): RowInsight {
+  return { id: "self-efficacy", emoji: POSITIVE_ROW_EMOJI[band], band, text: CONFIDENCE_ROW_COPY[band] };
+}
 
 export interface ConfidenceHook {
-  band: Band;
+  id: "unbreakable-architect" | "depleted-expert" | "master-operator" | "competency-gap";
+  archetypeName: string;
   heading: string;
-  stat: string;
+  contextLabel: string;
+  contextText: string;
+  meaningLabel: string;
+  meaningParagraphs: string[];
   pivot: string;
 }
 
-export function chooseConfidenceHook(answers: Record<string, number>): ConfidenceHook {
-  const confidence = bandForModule("self-efficacy", answers);
-  const technostress = bandForModule("technostress", answers);
-  const underPressure = technostress === "High";
-  const pivot =
-    "That's every piece of your profile mapped. Your full report connects them — how your specific combination of grit, execution, and pressure is actually shaping your confidence, and what to do next.";
+function depletedExpertContext(tier: ExperienceTier): string {
+  if (tier === "newcomer") {
+    return "Early in your career, self-efficacy is highly fragile, because you haven't yet accumulated enough historical \"wins\" to fall back on. When techno-complexity hits, it can feel like a personal failure rather than a normal part of the learning curve.";
+  }
+  if (tier === "veteran") {
+    return "Even with years of experience behind you, a sustained high-pressure stretch can wear down confidence that was previously solid. That's not a reflection of your underlying skill — it's what chronic overload does to anyone.";
+  }
+  return "A few years in, you've built real skill, but maybe not yet enough varied experience to fall back on when several new pressures hit at once. That gap between skill and self-trust tends to close with more reps, not more effort.";
+}
 
-  if (confidence === "High") {
+function unbreakableArchitectContext(tier: ExperienceTier): string {
+  if (tier === "veteran") {
+    return "With over a decade in the industry, your high self-efficacy acts as a massive anchor. You've survived multiple hype-cycles already, so your brain recognizes the current AI transition as just another cycle you can master, shielding you from panic.";
+  }
+  if (tier === "newcomer") {
+    return "Building this kind of confidence this early in your career is a strong signal — you're generating real mastery experiences fast enough to outpace the pressure, which isn't the norm this early on.";
+  }
+  return "You've accumulated enough real wins by now that pressure reads as familiar territory rather than a threat — a pattern that tends to keep compounding from here.";
+}
+
+/**
+ * demographics: experience personalizes Depleted Expert and Unbreakable Architect — the
+ * same stress-vs-efficacy reading means something different for someone who hasn't
+ * accumulated "wins" to fall back on yet vs. someone who's survived several tech cycles.
+ * gritBand: the participant's own Grit reading, referenced only in the Unbreakable
+ * Architect narrative (gated on it actually being High, so this report never claims a
+ * strength the Grit report didn't actually find).
+ */
+export function chooseConfidenceHook(
+  answers: Record<string, number>,
+  demographics: Record<string, string>,
+  gritBand: Band
+): ConfidenceHook {
+  const efficacyHigh = bandForModule("self-efficacy", answers) === "High";
+  const stressHigh = bandForModule("technostress", answers) === "High" || bandForModule("ai-anxiety", answers) === "High";
+  const experienceTier = experienceTierFor(demographics.experience);
+
+  if (stressHigh && efficacyHigh) {
+    const gritLine =
+      gritBand === "High"
+        ? "Instead of letting constant AI updates and tight deadlines defeat you, your high grit is pushing you to confront these challenges head-on."
+        : "Instead of letting constant AI updates and tight deadlines defeat you, you're confronting these challenges head-on rather than avoiding them.";
     return {
-      band: confidence,
-      heading: "This is your internal bridge.",
-      stat: underPressure
-        ? "Your belief in your ability to solve complex problems at work remains high despite the techno-overload you're carrying. That's the single most important pattern in your profile so far: you're maintaining mastery under pressure rather than losing it. Confidence is the bridge that lets grit actually fight back against stress instead of being worn down by it."
-        : "You consistently believe you can find a way through whatever your job throws at you. That belief tends to be self-fulfilling — it's the bridge that turns grit and adaptability into sustained output instead of burnout.",
-      pivot,
+      id: "unbreakable-architect",
+      archetypeName: "The Unbreakable Architect",
+      heading: "Your Mindset Profile: The Unbreakable Architect",
+      contextLabel: "The context of your experience:",
+      contextText: unbreakableArchitectContext(experienceTier),
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        `You're experiencing a psychological "Gain Spiral." ${gritLine} Every time you debug a complex system or master a new framework under pressure, it deposits a "mastery experience" into your psychological bank account.`,
+        "The environment is throwing real friction at you, but your internal psychological armor is holding — and that armor is exactly what lets the rest of your profile keep compounding instead of eroding.",
+      ],
+      pivot:
+        "You have the grit, you've faced the stress, and your confidence is holding strong. That's every piece of your profile mapped — your full report connects them, showing exactly how this psychological state has been driving your execution and collaboration.",
     };
   }
 
-  if (confidence === "Moderate") {
+  if (stressHigh && !efficacyHigh) {
     return {
-      band: confidence,
-      heading: "This is your internal bridge.",
-      stat: underPressure
-        ? "Your confidence is holding, but it's under real load — the pressure you're carrying appears to be pressing on your belief in your own abilities. This is the exact point where stress either gets absorbed or starts to translate into lost output."
-        : "You generally trust your ability to handle what comes your way, though it isn't unshakeable yet. Confidence at this level grows fastest from small, concrete wins rather than reassurance.",
-      pivot,
+      id: "depleted-expert",
+      archetypeName: "The Depleted Expert",
+      heading: "Your Mindset Profile: The Depleted Expert",
+      contextLabel: "The context of your experience:",
+      contextText: depletedExpertContext(experienceTier),
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        "The structural demands are currently winning. The constant barrage of system changes and time pressure has begun to press on your core belief in your technical capabilities.",
+        "Conservation of Resources theory calls this a \"loss spiral\" — the same resources needed to rebuild confidence are exactly what the stress is depleting, which is why this tends not to resolve on its own without a deliberate change in load.",
+      ],
+      pivot:
+        "That's every piece of your profile mapped. Your full report connects them — including how this dip in confidence is actually showing up in your execution and collaboration.",
+    };
+  }
+
+  if (!stressHigh && efficacyHigh) {
+    return {
+      id: "master-operator",
+      archetypeName: "The Master Operator",
+      heading: "Your Mindset Profile: The Master Operator",
+      contextLabel: "The context of your state:",
+      contextText:
+        "Low environmental friction combined with high self-belief is the state most engineers are chasing — and it doesn't happen by accident.",
+      meaningLabel: "What this means for you:",
+      meaningParagraphs: [
+        "You're in something close to the optimal state of flow. The environmental friction around you is manageable, and your technical confidence is near its peak.",
+        "This combination is genuinely rare in this industry — worth noticing what's working here specifically, so it's easier to protect if demands shift later.",
+      ],
+      pivot:
+        "That's every piece of your profile mapped. Your full report connects them — showing exactly how this combination of low friction and high confidence has been translating into your actual output.",
     };
   }
 
   return {
-    band: confidence,
-    heading: "This is your internal bridge.",
-    stat: underPressure
-      ? "Your confidence is reading low while you're carrying substantial technological pressure. That combination matters: when self-efficacy drops under load, capable people often stop attempting the very work that would rebuild their sense of mastery."
-      : "Your answers suggest you're less sure of your ability to handle job demands than your effort and adaptability elsewhere would predict. That gap is worth naming — low self-efficacy can quietly cap how much of your real capability actually reaches your work.",
-    pivot,
+    id: "competency-gap",
+    archetypeName: "The Competency Gap",
+    heading: "Your Mindset Profile: The Competency Gap",
+    contextLabel: "The context of your state:",
+    contextText:
+      "A stable environment paired with real self-doubt is a specific, useful signal — the causes tend to be much narrower and more fixable than they feel in the moment.",
+    meaningLabel: "What this means for you:",
+    meaningParagraphs: [
+      "Your work environment is relatively stable, but you're experiencing real self-doubt about your own capabilities.",
+      "Because the structural pressure isn't unusually high, this more often points to a direct skill-gap in a specific area than to burnout — which is genuinely good news, since skill gaps are the most directly fixable pattern in this whole report.",
+    ],
+    pivot:
+      "That's every piece of your profile mapped. Your full report connects them — including a closer look at where this specific gap is actually showing up in your day-to-day execution.",
   };
 }

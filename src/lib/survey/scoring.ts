@@ -307,6 +307,17 @@ export function bandForModule(moduleId: string, answers: Record<string, number>)
   return bandFor(pctForModule(moduleId, answers));
 }
 
+/**
+ * Band for an arbitrary raw score against its own scale's max — e.g. one Technostress
+ * sub-section (Overload/Complexity/Uncertainty), which isn't a module on its own. Always
+ * reads the score against its own scale's actual range, so a 5-point and a 7-point
+ * construct (Technostress vs. AI Job Anxiety) are never compared using the same raw
+ * number — a 7-point "3" and a 5-point "3" are not equivalently "high."
+ */
+export function bandForScore(score: number, max: number): Band {
+  return bandFor(toPct(score, max));
+}
+
 // --- Operating profile / archetype -----------------------------------------
 
 export interface Archetype {

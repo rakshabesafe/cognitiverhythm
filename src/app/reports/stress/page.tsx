@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { chooseStressHook } from "@/lib/survey/hooks";
-import { computeBenchmarkForModules, computeSectionBreakdown } from "@/lib/survey/scoring";
+import { chooseStressHook, describeStressRow, type RowInsight } from "@/lib/survey/hooks";
+import { bandForModule, bandForScore, computeBenchmarkForModules, computeSectionBreakdown } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
-import { BenchmarkRows } from "@/components/survey/BenchmarkRows";
+import { InsightRows, type InsightRowData } from "@/components/survey/InsightRows";
 import { ReportShell } from "@/components/survey/ReportShell";
-import { ScoreTable } from "@/components/survey/ScoreTable";
 
 const TIER = PROFILE_TIERS.find((t) => t.id === "stress")!;
 
@@ -17,23 +16,41 @@ export default async function StressReportPage() {
 
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
+
   const sections = computeSectionBreakdown("technostress", responses.answers, peers);
-  const hook = chooseStressHook(responses.answers, sections);
-  const rows = computeBenchmarkForModules(TIER.moduleIds, responses.answers, peers);
+  const [aiAnxietyRow] = computeBenchmarkForModules(["ai-anxiety"], responses.answers, peers);
+  const gritBand = bandForModule("grit", responses.answers);
+  const hook = chooseStressHook(responses.answers, responses.demographics, gritBand);
+
+  const rows: InsightRowData[] = [
+    ...sections.map((s) => ({ id: s.id, title: s.label, yourScore: s.yourScore, max: s.max, peerAverage: s.peerAverage, peerCount: s.peerCount })),
+    { id: "ai-anxiety", title: "AI Job Anxiety", yourScore: aiAnxietyRow.yourScore, max: aiAnxietyRow.max, peerAverage: aiAnxietyRow.peerAverage, peerCount: aiAnxietyRow.peerCount },
+  ];
+  const insights: RowInsight[] = rows.map((row) => describeStressRow(row.id, bandForScore(row.yourScore, row.max)));
 
   return (
-    <ReportShell tier={TIER} heading={hook.heading} stat={hook.stat} pivot={hook.pivot} responses={responses}>
-      <ScoreTable
-        title="Where the pressure is coming from"
-        rows={sections.map((s) => ({
-          id: s.id,
-          label: s.label,
-          yourScore: s.yourScore,
-          peerAverage: s.peerAverage,
-          max: s.max,
-        }))}
-      />
-      <BenchmarkRows rows={rows} />
+    <ReportShell
+      tier={TIER}
+      heading={hook.heading}
+      stat="We've seen how you allocate your energy. Now let's look at the systemic forces draining it. In the modern IT landscape, stress originates from two directions: Operational Friction (the speed, complexity, and volume of your work) and Existential Threat (AI job replacement anxiety). Here's your current burden:"
+      pivot={hook.pivot}
+      responses={responses}
+    >
+      <InsightRows rows={rows} insights={insights} />
+
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.contextLabel}</p>
+        <p className="text-sm text-foreground/90">{hook.contextText}</p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-foreground">{hook.meaningLabel}</p>
+        {hook.meaningParagraphs.map((paragraph, i) => (
+          <p key={i} className="text-foreground/90">
+            {paragraph}
+          </p>
+        ))}
+      </div>
     </ReportShell>
   );
 }
