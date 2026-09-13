@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import { chooseGritHook, overallGritSummary } from "@/lib/survey/hooks";
-import { computeGritFacetBreakdown, computeModulePeerStat, GRIT_OVERALL_REFERENCE } from "@/lib/survey/scoring";
+import { computeGritFacetBreakdown, GRIT_OVERALL_REFERENCE } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { FacetDescriptions } from "@/components/survey/FacetDescriptions";
 import { ReportShell } from "@/components/survey/ReportShell";
@@ -18,7 +18,7 @@ export default async function GritReportPage() {
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
   const facets = computeGritFacetBreakdown(responses.answers, peers);
-  const hook = chooseGritHook(facets, computeModulePeerStat("technostress", peers));
+  const hook = chooseGritHook(facets);
 
   const overallYourScore = facets.reduce((sum, f) => sum + f.yourScore, 0) / facets.length;
 

@@ -1,6 +1,6 @@
 // Groups the underlying survey modules into the profile "unlocks" participants experience,
-// so the app reads as unlocking a report rather than filling out a form. The order follows
-// the study's own theoretical path: traits → environment → mindset → output, with each
+// so the app reads as unlocking a report rather than filling out a form: traits (Grit) →
+// output (Technology & Team) → environment (Stress) → mindset (Confidence), with each
 // unlocked report ending on a hook into the one that follows.
 import { LIKERT_MODULES } from "./schema";
 
@@ -26,6 +26,15 @@ export const PROFILE_TIERS: ProfileTier[] = [
     reportHref: "/reports/grit",
   },
   {
+    id: "tech-team",
+    title: "Technology & Team Profile",
+    emoji: "🤝",
+    teaser: "Your actual execution — deep technical work versus the invisible collaborative kind.",
+    analyzingLabel: "Analyzing your execution and collaboration…",
+    moduleIds: ["task-performance", "contextual-performance"],
+    reportHref: "/reports/tech-team",
+  },
+  {
     id: "stress",
     title: "Stress Profile",
     emoji: "⚡",
@@ -42,15 +51,6 @@ export const PROFILE_TIERS: ProfileTier[] = [
     analyzingLabel: "Locating your internal bridge…",
     moduleIds: ["self-efficacy"],
     reportHref: "/reports/confidence",
-  },
-  {
-    id: "tech-team",
-    title: "Technology & Team Profile",
-    emoji: "🤝",
-    teaser: "Your actual execution — deep technical work versus the invisible collaborative kind.",
-    analyzingLabel: "Analyzing your execution and collaboration…",
-    moduleIds: ["task-performance", "contextual-performance"],
-    reportHref: "/reports/tech-team",
   },
 ];
 

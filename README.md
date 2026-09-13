@@ -44,16 +44,15 @@ intro) → each Likert section in a fixed order, each opening with its own short
 matters" intro screen.
 
 Framed to the participant as **unlocking their profile**, not filling out a form. The six
-Likert modules are grouped into four tiers (`src/lib/survey/tiers.ts`), ordered to follow
-the study's own theoretical path — **traits → environment → mindset → output** — so each
-unlocked report ends on a cliffhanger into the next:
+Likert modules are grouped into four tiers (`src/lib/survey/tiers.ts`), each unlocked
+report ending on a cliffhanger into the next:
 
 | # | Profile | Unlocked after | Report | Pivots into |
 |---|---------|----------------|--------|-------------|
-| 1 | 🌱 **Grit Profile** | Grit | `/reports/grit` | the friction testing that grit |
-| 2 | ⚡ **Stress Profile** | Technostress + AI Job Anxiety | `/reports/stress` | whether that pressure is draining confidence |
-| 3 | 🧠 **Confidence Profile** | Self-Efficacy | `/reports/confidence` | how confidence converts into output |
-| 4 | 🤝 **Technology & Team Profile** | Task + Contextual Performance | `/reports/tech-team` | the full combined report |
+| 1 | 🌱 **Grit Profile** | Grit | `/reports/grit` | how it shows up in execution & collaboration |
+| 2 | 🤝 **Technology & Team Profile** | Task + Contextual Performance | `/reports/tech-team` | the environmental pressure behind it |
+| 3 | ⚡ **Stress Profile** | Technostress + AI Job Anxiety | `/reports/stress` | whether that pressure is draining confidence |
+| 4 | 🧠 **Confidence Profile** | Self-Efficacy | `/reports/confidence` | the full combined report |
 | 5 | 📊 **Full Combined Report** | everything (100%) | `/results` | — |
 
 Answering the last item of a tier holds on a brief "analyzing…" beat (`UnlockFlow`) and
@@ -90,7 +89,7 @@ The incentive for completing it honestly and fully is the personalized report it
 ## 3. Functional Requirements: Participant Flow
 * **Authentication:** Simple email and password registration/login. Email acts as the unique identifier to prevent duplicate submissions. No complex password rules or Single Sign-On (SSO) required.
 * **Session Management:** The application must remember the user's state (via a signed cookie) across sessions to minimize re-login friction on the same device. If a session outlives the account it points to (e.g. local data was reset), the app must degrade gracefully — redirect to login — never crash.
-* **Guided, Sequential Flow:** After consent, participants are auto-routed through one section at a time, in a fixed order — **About You (demographics) first, then Grit, Technostress, AI Job Anxiety, Self-Efficacy, Task Performance, and Contextual Performance** — rather than choosing freely from a menu. That order is deliberate: it walks the study's own theoretical path (traits → environment → mindset → output) so each unlocked profile sets up a genuine question the next section answers. Finishing a section automatically advances into the next one.
+* **Guided, Sequential Flow:** After consent, participants are auto-routed through one section at a time, in a fixed order — **About You (demographics) first, then Grit, Task Performance, Contextual Performance, Technostress, AI Job Anxiety, and Self-Efficacy** — rather than choosing freely from a menu. That order is deliberate: each unlocked profile sets up a genuine question the next section answers (traits → output → environment → mindset). Finishing a section automatically advances into the next one.
 * **Section Intros:** Every section, including About You, opens with a short, motivating "why this matters" screen (an emoji, a one-line tagline, 1–2 sentences of relevance) before any questions appear. The About You intro explicitly reassures participants that their data is 100% private, used only in aggregate for academic research, and never sold, shared, or used for any commercial purpose.
 * **Unlock Moments & Cliffhangers:** Completing the last item of a tier pauses on a brief "Analyzing…" beat, then reveals that tier's report — the reward for the data just given. Every report states what it found, shows the numbers behind it, and ends on a hook into the next profile ("some engineers lose their confidence under this much pressure, while others rely on grit — let's measure yours"), so motivation to continue comes from curiosity about themselves rather than a progress bar. Each statistic is drawn from the participant's own answers plus real accumulated peer data where enough exists — never a fabricated number. The Grit report additionally renders a full facet breakdown table (the four official Multi-Dimensional Grit Scale dimensions — Perseverance of Effort, Adaptability to Situations, Spirited Initiative, Steadfastness in Adverse Situations), each row showing the participant's own score against a fixed reference average (validated MDGS norms for this exact instrument — see `GRIT_FACET_REFERENCE` in `src/lib/survey/scoring.ts`) and, once ≥3 in-study peers have answered that facet, the live peer average too; the Stress report likewise breaks Technostress into its Overload / Complexity / Uncertainty sub-dimensions so the copy can name whichever one is actually driving the load. The UI never names or cites the source of the reference figures to participants — no author, year, or paper reference appears anywhere in the app's user-facing copy. This sustains momentum past the point where interest most commonly drops off.
 * **One-Item-at-a-Time Disclosure:** Both the demographic intake and every Likert section present a single item per screen — never a list or a long form — to minimize cognitive load and avoid the feeling of "filling out a form."

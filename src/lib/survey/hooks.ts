@@ -1,7 +1,6 @@
 // All participant-facing narrative copy for the unlocked profile reports lives here.
-// Each report ends on a "pivot" — a hook into the profile that comes next, following the
-// study's own theoretical path: traits (Grit) → environment (Stress) → mindset
-// (Confidence) → output (Technology & Team).
+// Each report ends on a "pivot" — a hook into the profile that comes next: traits (Grit)
+// → output (Technology & Team) → environment (Stress) → mindset (Confidence).
 import { GRIT_FACETS } from "./schema";
 import {
   bandForModule,
@@ -9,7 +8,6 @@ import {
   tierFor,
   type Band,
   type GritFacetScore,
-  type PeerStat,
   type ScoreTier,
   type SectionScore,
 } from "./scoring";
@@ -32,7 +30,7 @@ function pctOf5(mean: number): number {
   return (mean - 1) / 4;
 }
 
-// --- 1. Grit Profile → pivots into Stress ------------------------------------
+// --- 1. Grit Profile → pivots into Technology & Team ---------------------------
 
 interface GritFacetCopy {
   /** Plain-language definition of what this dimension actually measures. */
@@ -162,33 +160,27 @@ export interface GritHook {
  * facet against its own reference point rather than against the participant's other
  * facets). The heading below only ever claims relative standing within their own profile,
  * never absolute strength, so it can't contradict the graded descriptions underneath it.
- *
- * peerTechnostress: computed across everyone (not just fully-completed participants) who
- * has answered the Technostress section, since most peers won't have finished the whole
- * assessment yet when this fires. Real accumulated data only — never a placeholder number.
  */
-export function chooseGritHook(facets: GritFacetScore[], peerTechnostress: PeerStat): GritHook {
+export function chooseGritHook(facets: GritFacetScore[]): GritHook {
   const top = facets[0];
   const facetDescriptions = describeGritFacets(facets);
 
   // None of these claim an absolute strength level — that would risk contradicting a
   // facet's graded description above if the participant's relative-highest still sits
-  // below the typical range. They only pose a forward-looking question.
+  // below the typical range. They only pose a forward-looking question, pivoting into
+  // Technology & Team — the next tier in the flow.
   const pivots: Record<string, string> = {
     steadfastness:
-      "Resilience doesn't exist in a vacuum, though — it's shaped by what's pushing against it. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+      "Resilience doesn't exist in a vacuum, though — it's tested by what you actually do with it. Next, let's see how this shows up in your daily execution and team collaboration.",
     adaptability:
-      "But knowing how to adjust course is only half the picture — the other half is how much friction you're actually adjusting against. Next, let's look at the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+      "But knowing how to adjust course is only half the picture — the other half is what you actually produce with it. Next, let's see how this shows up in your daily execution and team collaboration.",
     perseveranceOfEffort:
-      "Whether that effort sustains you or drains you depends heavily on what you're pushing against. Next, let's measure the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+      "Whether that effort sustains you or drains you shows up most clearly in what you actually produce. Next, let's see how this translates into your daily execution and team collaboration.",
     spiritedInitiative:
-      "Which raises the obvious question: how much pressure are you actually absorbing? Next, let's measure the environmental friction — technostress and AI anxiety — that's currently testing your grit.",
+      "Which raises the obvious question: how does that translate into what you actually get done? Next, let's see how this shows up in your daily execution and team collaboration.",
   };
 
-  let pivot = pivots[top?.id ?? ""] ?? pivots.adaptability;
-  if (top?.id === "steadfastness" && peerTechnostress.average !== null && peerTechnostress.count >= 3) {
-    pivot = `${pivot} For context, across the ${peerTechnostress.count} peers who've reached the Technostress section so far, even highly resilient people still report real strain from workplace technology, averaging ${peerTechnostress.average.toFixed(2)} / 5.0 — resilience doesn't seem to fully cancel out the overload.`;
-  }
+  const pivot = pivots[top?.id ?? ""] ?? pivots.adaptability;
 
   return {
     heading: top ? `Your strongest dimension right now is ${top.label}.` : "Here's your grit profile.",
@@ -199,7 +191,75 @@ export function chooseGritHook(facets: GritFacetScore[], peerTechnostress: PeerS
   };
 }
 
-// --- 2. Stress Profile → pivots into Confidence -------------------------------
+// --- 2. Technology & Team Profile → pivots into Stress -------------------------
+
+export interface PerformanceHook {
+  id: "network-influence" | "effort-to-impact" | "resilience-roi" | "balanced-output";
+  heading: string;
+  stat: string;
+  pivot: string;
+}
+
+interface PeerPercentile {
+  percentile: number | null;
+  count: number;
+}
+
+/**
+ * Fires after Contextual Performance, which always follows Task Performance in the fixed
+ * module order, so both are guaranteed answered by then. contextualPercentile is computed
+ * from real peer data only — omitted from the copy entirely when there isn't enough of it
+ * yet, rather than inventing a number.
+ */
+export function choosePerformanceHook(answers: Record<string, number>, contextualPercentile: PeerPercentile): PerformanceHook {
+  const perseveranceOfEffort = pctOf5(meanOf(facetItems("perseveranceOfEffort"), answers));
+  const adaptability = pctOf5(meanOf(facetItems("adaptability"), answers));
+  const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
+  const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
+
+  const pivot =
+    "Now that we've seen your actual execution, let's measure the environmental pressure behind it — technostress and AI anxiety — and see how it's really landing on you.";
+
+  if (contextualPerformance >= HIGH && contextualPerformance >= taskPerformance) {
+    const { percentile, count } = contextualPercentile;
+    return {
+      id: "network-influence",
+      heading: "This is your actual execution.",
+      stat:
+        percentile !== null
+          ? `Your contextual performance puts you ahead of about ${percentile}% of the ${count} peers who've reached this section so far — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.`
+          : "Your contextual performance stands out — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.",
+      pivot,
+    };
+  }
+
+  if (perseveranceOfEffort >= HIGH && taskPerformance >= HIGH) {
+    return {
+      id: "effort-to-impact",
+      heading: "This is your actual execution.",
+      stat: "Your high effort and perseverance are clearly translating into strong task execution. But the pattern in your answers suggests you may be getting there through sheer force rather than efficiency — a sustainable strategy for a sprint, not for a career.",
+      pivot,
+    };
+  }
+
+  if (adaptability >= HIGH && taskPerformance >= HIGH) {
+    return {
+      id: "resilience-roi",
+      heading: "This is your actual execution.",
+      stat: "You're successfully converting your adaptability into consistent task execution — a sign your operating rhythm holds up well even as things shift around you.",
+      pivot,
+    };
+  }
+
+  return {
+    id: "balanced-output",
+    heading: "This is your actual execution.",
+    stat: "Your deep technical work and your collaborative work are moving together in a balanced way, with no obvious strain showing up between them.",
+    pivot,
+  };
+}
+
+// --- 3. Stress Profile → pivots into Confidence -------------------------------
 
 export interface StressHook {
   band: Band;
@@ -247,7 +307,7 @@ export function chooseStressHook(answers: Record<string, number>, sections: Sect
   };
 }
 
-// --- 3. Confidence Profile → pivots into Technology & Team --------------------
+// --- 4. Confidence Profile → pivots into the Full Combined Report -------------
 
 export interface ConfidenceHook {
   band: Band;
@@ -260,6 +320,8 @@ export function chooseConfidenceHook(answers: Record<string, number>): Confidenc
   const confidence = bandForModule("self-efficacy", answers);
   const technostress = bandForModule("technostress", answers);
   const underPressure = technostress === "High";
+  const pivot =
+    "That's every piece of your profile mapped. Your full report connects them — how your specific combination of grit, execution, and pressure is actually shaping your confidence, and what to do next.";
 
   if (confidence === "High") {
     return {
@@ -268,8 +330,7 @@ export function chooseConfidenceHook(answers: Record<string, number>): Confidenc
       stat: underPressure
         ? "Your belief in your ability to solve complex problems at work remains high despite the techno-overload you're carrying. That's the single most important pattern in your profile so far: you're maintaining mastery under pressure rather than losing it. Confidence is the bridge that lets grit actually fight back against stress instead of being worn down by it."
         : "You consistently believe you can find a way through whatever your job throws at you. That belief tends to be self-fulfilling — it's the bridge that turns grit and adaptability into sustained output instead of burnout.",
-      pivot:
-        "Finally, let's see exactly how this confidence translates into your daily output and your team collaboration — the two halves of your actual execution.",
+      pivot,
     };
   }
 
@@ -280,8 +341,7 @@ export function chooseConfidenceHook(answers: Record<string, number>): Confidenc
       stat: underPressure
         ? "Your confidence is holding, but it's under real load — the pressure you're carrying appears to be pressing on your belief in your own abilities. This is the exact point where stress either gets absorbed or starts to translate into lost output."
         : "You generally trust your ability to handle what comes your way, though it isn't unshakeable yet. Confidence at this level grows fastest from small, concrete wins rather than reassurance.",
-      pivot:
-        "Finally, let's see exactly how this confidence translates into your daily output and your team collaboration — the two halves of your actual execution.",
+      pivot,
     };
   }
 
@@ -291,74 +351,6 @@ export function chooseConfidenceHook(answers: Record<string, number>): Confidenc
     stat: underPressure
       ? "Your confidence is reading low while you're carrying substantial technological pressure. That combination matters: when self-efficacy drops under load, capable people often stop attempting the very work that would rebuild their sense of mastery."
       : "Your answers suggest you're less sure of your ability to handle job demands than your effort and adaptability elsewhere would predict. That gap is worth naming — low self-efficacy can quietly cap how much of your real capability actually reaches your work.",
-    pivot:
-      "Finally, let's see exactly how this plays out in practice — your daily output and your team collaboration, the two halves of your actual execution.",
-  };
-}
-
-// --- 4. Technology & Team Profile → pivots into the Full Combined Report ------
-
-export interface PerformanceHook {
-  id: "network-influence" | "effort-to-impact" | "resilience-roi" | "balanced-output";
-  heading: string;
-  stat: string;
-  pivot: string;
-}
-
-interface PeerPercentile {
-  percentile: number | null;
-  count: number;
-}
-
-/**
- * Fires after Contextual Performance, the final module. contextualPercentile is computed
- * from real peer data only — omitted from the copy entirely when there isn't enough of it
- * yet, rather than inventing a number.
- */
-export function choosePerformanceHook(answers: Record<string, number>, contextualPercentile: PeerPercentile): PerformanceHook {
-  const perseveranceOfEffort = pctOf5(meanOf(facetItems("perseveranceOfEffort"), answers));
-  const adaptability = pctOf5(meanOf(facetItems("adaptability"), answers));
-  const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
-  const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
-
-  const pivot =
-    "That's every piece of your profile mapped. Your full report connects them — how your specific combination of grit and pressure is actually driving your performance.";
-
-  if (contextualPerformance >= HIGH && contextualPerformance >= taskPerformance) {
-    const { percentile, count } = contextualPercentile;
-    return {
-      id: "network-influence",
-      heading: "This is your actual execution.",
-      stat:
-        percentile !== null
-          ? `Your contextual performance puts you ahead of about ${percentile}% of the ${count} peers who've reached this section so far — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.`
-          : "Your contextual performance stands out — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.",
-      pivot,
-    };
-  }
-
-  if (perseveranceOfEffort >= HIGH && taskPerformance >= HIGH) {
-    return {
-      id: "effort-to-impact",
-      heading: "This is your actual execution.",
-      stat: "Your high effort and perseverance are clearly translating into strong task execution. But the pattern in your answers suggests you may be getting there through sheer force rather than efficiency — a sustainable strategy for a sprint, not for a career.",
-      pivot,
-    };
-  }
-
-  if (adaptability >= HIGH && taskPerformance >= HIGH) {
-    return {
-      id: "resilience-roi",
-      heading: "This is your actual execution.",
-      stat: "You're successfully converting your adaptability into consistent task execution — a sign your operating rhythm holds up well even as things shift around you.",
-      pivot,
-    };
-  }
-
-  return {
-    id: "balanced-output",
-    heading: "This is your actual execution.",
-    stat: "Your deep technical work and your collaborative work are moving together in a balanced way, with no obvious strain showing up between them.",
     pivot,
   };
 }
