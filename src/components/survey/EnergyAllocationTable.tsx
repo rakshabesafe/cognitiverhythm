@@ -1,8 +1,14 @@
 import type { EnergyAllocationRowInsight } from "@/lib/survey/hooks";
-import type { BenchmarkRow } from "@/lib/survey/scoring";
+
+export interface EnergyAllocationRow {
+  moduleId: "task-performance" | "contextual-performance";
+  title: string;
+  yourScore: number;
+  max: number;
+}
 
 interface EnergyAllocationTableProps {
-  rows: BenchmarkRow[];
+  rows: EnergyAllocationRow[];
   insights: EnergyAllocationRowInsight[];
 }
 
@@ -10,8 +16,9 @@ interface EnergyAllocationTableProps {
  * Per-vector energy cards, styled after BenchmarkRows but deliberately avoiding the app's
  * usual 🟢🟡🔴 good/bad coloring — Task and Contextual Performance are framed as where
  * cognitive energy is currently allocated, not scores to be judged, so every row uses the
- * same neutral accent color regardless of level. A card layout (not a wide table) keeps
- * the full insight sentence readable at mobile widths.
+ * same neutral accent color regardless of level. No peer baseline is shown here — the
+ * archetype narrative is about the participant's own allocation, not a comparison — so
+ * this report never fetches or renders peer data at all.
  */
 export function EnergyAllocationTable({ rows, insights }: EnergyAllocationTableProps) {
   return (
@@ -37,11 +44,6 @@ export function EnergyAllocationTable({ rows, insights }: EnergyAllocationTableP
                 <span className="font-medium text-accent">● {insight.label}:</span> {insight.text}
               </p>
             )}
-            <p className="mt-1 text-xs text-muted">
-              {row.peerAverage !== null
-                ? `Peer baseline: ${row.peerAverage.toFixed(2)} / ${row.max.toFixed(1)} (${row.peerCount} ${row.peerCount === 1 ? "peer" : "peers"}).`
-                : "You're among the first participants in this study, so there's no peer baseline yet."}
-            </p>
           </div>
         );
       })}
