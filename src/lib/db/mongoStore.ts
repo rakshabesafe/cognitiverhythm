@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { MongoClient, type Db } from "mongodb";
+import { MongoClient, MongoError, type Db } from "mongodb";
 import { computeCompletion } from "./completion";
 import type { DataStore, ResponseRecord, UserRecord } from "./types";
 
@@ -24,14 +24,25 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-// A small, serverless-appropriate pool. The driver's default (maxPoolSize: 100) assumes
-// one long-lived server process; on Vercel, every concurrent function instance gets its
-// own client and its own pool, so the default multiplies out fast and can overwhelm a
-// shared/free Atlas cluster's connection limit — surfacing as a confusing TLS handshake
-// error ("tlsv1 alert internal error") rather than a clear "too many connections" one.
-const CLIENT_OPTIONS = { maxPoolSize: 5, minPoolSize: 0 };
+// - maxPoolSize: the driver's default (100) assumes one long-lived server process; on
+//   Vercel every concurrent function instance gets its own client and its own pool, so
+//   the default multiplies out fast against a shared/free Atlas cluster's connection cap.
+// - maxIdleTimeMS: proactively recycle sockets that have sat idle for a while, rather
+//   than reusing one that may have gone stale — e.g. across a serverless platform
+//   freezing and later thawing a function instance, which can leave a pooled TLS session
+//   in a state Atlas no longer recognizes and rejects with a handshake-level error.
+// - family: 4 forces IPv4; asymmetric/broken IPv6 routing from some serverless platforms
+//   to Atlas is a documented cause of exactly this kind of garbled TLS handshake.
+const CLIENT_OPTIONS = { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 10_000, family: 4 as const };
 
 let cachedClientPromise: Promise<MongoClient> | undefined;
+
+function resetCachedClient() {
+  cachedClientPromise = undefined;
+  if (process.env.NODE_ENV === "development") {
+    global._mongoClientPromise = undefined;
+  }
+}
 
 function getClientPromise(): Promise<MongoClient> {
   if (process.env.NODE_ENV === "development") {
@@ -59,6 +70,30 @@ async function getDb(): Promise<Db> {
   }
   await indexesReady;
   return db;
+}
+
+function isRetryable(error: unknown): boolean {
+  // The driver itself labels transient, worth-retrying network/TLS failures this way —
+  // exactly the class of error a stale pooled connection produces.
+  return error instanceof MongoError && (error.hasErrorLabel("RetryableError") || error.hasErrorLabel("ResetPool"));
+}
+
+/**
+ * Runs `fn` against a connected Db, and if it fails with a retryable network/TLS error
+ * (e.g. a pooled connection gone stale after the serverless function was frozen and later
+ * thawed), discards the cached client and retries exactly once against a fresh one —
+ * rather than surfacing a transient blip as a hard failure, or letting this warm container
+ * keep reusing the same wedged connection for every request until it recycles.
+ */
+async function withDb<T>(fn: (db: Db) => Promise<T>): Promise<T> {
+  try {
+    return await fn(await getDb());
+  } catch (error) {
+    if (!isRetryable(error)) throw error;
+    resetCachedClient();
+    indexesReady = undefined;
+    return fn(await getDb());
+  }
 }
 
 interface UserDoc {
@@ -127,120 +162,131 @@ function completionUpdateOps(completedModules: string[], completedAt: string | u
 
 export const mongoStore: DataStore = {
   async createUser(email, passwordHash) {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const doc: UserDoc = {
-      _id: randomUUID(),
-      email: email.toLowerCase(),
-      passwordHash,
-      createdAt: now,
-      lastLoginAt: now,
-    };
-    await db.collection<UserDoc>("users").insertOne(doc);
-    await db.collection<ResponseDoc>("responses").insertOne(emptyResponseDoc(doc._id));
-    return toUserRecord(doc);
+    return withDb(async (db) => {
+      const now = new Date().toISOString();
+      const doc: UserDoc = {
+        _id: randomUUID(),
+        email: email.toLowerCase(),
+        passwordHash,
+        createdAt: now,
+        lastLoginAt: now,
+      };
+      await db.collection<UserDoc>("users").insertOne(doc);
+      await db.collection<ResponseDoc>("responses").insertOne(emptyResponseDoc(doc._id));
+      return toUserRecord(doc);
+    });
   },
 
   async getUserByEmail(email) {
-    const db = await getDb();
-    const doc = await db.collection<UserDoc>("users").findOne({ email: email.toLowerCase() });
-    return doc ? toUserRecord(doc) : null;
+    return withDb(async (db) => {
+      const doc = await db.collection<UserDoc>("users").findOne({ email: email.toLowerCase() });
+      return doc ? toUserRecord(doc) : null;
+    });
   },
 
   async getUserById(id) {
-    const db = await getDb();
-    const doc = await db.collection<UserDoc>("users").findOne({ _id: id });
-    return doc ? toUserRecord(doc) : null;
+    return withDb(async (db) => {
+      const doc = await db.collection<UserDoc>("users").findOne({ _id: id });
+      return doc ? toUserRecord(doc) : null;
+    });
   },
 
   async touchLogin(id) {
-    const db = await getDb();
-    await db
-      .collection<UserDoc>("users")
-      .updateOne({ _id: id }, { $set: { lastLoginAt: new Date().toISOString() } });
+    return withDb(async (db) => {
+      await db
+        .collection<UserDoc>("users")
+        .updateOne({ _id: id }, { $set: { lastLoginAt: new Date().toISOString() } });
+    });
   },
 
   async setConsent(id) {
-    const db = await getDb();
-    const consentAt = new Date().toISOString();
-    const result = await db
-      .collection<UserDoc>("users")
-      .findOneAndUpdate({ _id: id }, { $set: { consentAt } }, { returnDocument: "after" });
-    if (!result) throw new Error("User not found");
-    return toUserRecord(result);
+    return withDb(async (db) => {
+      const consentAt = new Date().toISOString();
+      const result = await db
+        .collection<UserDoc>("users")
+        .findOneAndUpdate({ _id: id }, { $set: { consentAt } }, { returnDocument: "after" });
+      if (!result) throw new Error("User not found");
+      return toUserRecord(result);
+    });
   },
 
   async getResponses(userId) {
-    const db = await getDb();
-    const doc = await db.collection<ResponseDoc>("responses").findOne({ _id: userId });
-    return doc ? toResponseRecord(doc) : toResponseRecord(emptyResponseDoc(userId));
+    return withDb(async (db) => {
+      const doc = await db.collection<ResponseDoc>("responses").findOne({ _id: userId });
+      return doc ? toResponseRecord(doc) : toResponseRecord(emptyResponseDoc(userId));
+    });
   },
 
   async saveDemographics(userId, fields) {
-    const db = await getDb();
-    const collection = db.collection<ResponseDoc>("responses");
-    const updatedAt = new Date().toISOString();
-    // Dot-notation $set on individual fields (rather than read-modify-write the whole
-    // `demographics` object) makes the actual data write atomic and race-free even if
-    // two saves for the same user land close together.
-    const setFields: Record<string, unknown> = { userId, updatedAt };
-    for (const [code, value] of Object.entries(fields)) {
-      setFields[`demographics.${code}`] = value;
-    }
-    const after = await collection.findOneAndUpdate(
-      { _id: userId },
-      { $set: setFields, $setOnInsert: { answers: {}, completedModules: [] } },
-      { upsert: true, returnDocument: "after" }
-    );
-    const record = after ?? { ...emptyResponseDoc(userId), ...setFields };
-    const { completedModules, completedAt } = computeCompletion(record.demographics, record.answers, record.completedAt);
-    const { set, unset } = completionUpdateOps(completedModules, completedAt);
-    await collection.updateOne(
-      { _id: userId },
-      { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) }
-    );
-    return { userId, demographics: record.demographics, answers: record.answers, completedModules, completedAt, updatedAt };
+    return withDb(async (db) => {
+      const collection = db.collection<ResponseDoc>("responses");
+      const updatedAt = new Date().toISOString();
+      // Dot-notation $set on individual fields (rather than read-modify-write the whole
+      // `demographics` object) makes the actual data write atomic and race-free even if
+      // two saves for the same user land close together.
+      const setFields: Record<string, unknown> = { userId, updatedAt };
+      for (const [code, value] of Object.entries(fields)) {
+        setFields[`demographics.${code}`] = value;
+      }
+      const after = await collection.findOneAndUpdate(
+        { _id: userId },
+        { $set: setFields, $setOnInsert: { answers: {}, completedModules: [] } },
+        { upsert: true, returnDocument: "after" }
+      );
+      const record = after ?? { ...emptyResponseDoc(userId), ...setFields };
+      const { completedModules, completedAt } = computeCompletion(record.demographics, record.answers, record.completedAt);
+      const { set, unset } = completionUpdateOps(completedModules, completedAt);
+      await collection.updateOne(
+        { _id: userId },
+        { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) }
+      );
+      return { userId, demographics: record.demographics, answers: record.answers, completedModules, completedAt, updatedAt };
+    });
   },
 
   async saveAnswer(userId, itemCode, value) {
-    const db = await getDb();
-    const collection = db.collection<ResponseDoc>("responses");
-    const updatedAt = new Date().toISOString();
-    const after = await collection.findOneAndUpdate(
-      { _id: userId },
-      {
-        $set: { userId, [`answers.${itemCode}`]: value, updatedAt },
-        $setOnInsert: { demographics: {}, completedModules: [] },
-      },
-      { upsert: true, returnDocument: "after" }
-    );
-    const record = after ?? emptyResponseDoc(userId);
-    const { completedModules, completedAt } = computeCompletion(record.demographics, record.answers, record.completedAt);
-    const { set, unset } = completionUpdateOps(completedModules, completedAt);
-    await collection.updateOne(
-      { _id: userId },
-      { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) }
-    );
-    return { userId, demographics: record.demographics, answers: record.answers, completedModules, completedAt, updatedAt };
+    return withDb(async (db) => {
+      const collection = db.collection<ResponseDoc>("responses");
+      const updatedAt = new Date().toISOString();
+      const after = await collection.findOneAndUpdate(
+        { _id: userId },
+        {
+          $set: { userId, [`answers.${itemCode}`]: value, updatedAt },
+          $setOnInsert: { demographics: {}, completedModules: [] },
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+      const record = after ?? emptyResponseDoc(userId);
+      const { completedModules, completedAt } = computeCompletion(record.demographics, record.answers, record.completedAt);
+      const { set, unset } = completionUpdateOps(completedModules, completedAt);
+      await collection.updateOne(
+        { _id: userId },
+        { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) }
+      );
+      return { userId, demographics: record.demographics, answers: record.answers, completedModules, completedAt, updatedAt };
+    });
   },
 
   async listUsers() {
-    const db = await getDb();
-    const docs = await db.collection<UserDoc>("users").find().toArray();
-    return docs.map(toUserRecord);
+    return withDb(async (db) => {
+      const docs = await db.collection<UserDoc>("users").find().toArray();
+      return docs.map(toUserRecord);
+    });
   },
 
   async listAllResponses() {
-    const db = await getDb();
-    const docs = await db.collection<ResponseDoc>("responses").find().toArray();
-    return docs.map(toResponseRecord);
+    return withDb(async (db) => {
+      const docs = await db.collection<ResponseDoc>("responses").find().toArray();
+      return docs.map(toResponseRecord);
+    });
   },
 
   async deleteUser(id) {
-    const db = await getDb();
-    await Promise.all([
-      db.collection<UserDoc>("users").deleteOne({ _id: id }),
-      db.collection<ResponseDoc>("responses").deleteOne({ _id: id }),
-    ]);
+    return withDb(async (db) => {
+      await Promise.all([
+        db.collection<UserDoc>("users").deleteOne({ _id: id }),
+        db.collection<ResponseDoc>("responses").deleteOne({ _id: id }),
+      ]);
+    });
   },
 };
