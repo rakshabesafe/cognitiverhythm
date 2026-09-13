@@ -4,8 +4,9 @@ import { getValidParticipantId } from "@/lib/auth/session";
 import { findModuleForItemCode, SCALES } from "@/lib/survey/schema";
 import { getNextRoute } from "@/lib/survey/scoring";
 import { tierUnlockedByModule } from "@/lib/survey/tiers";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const userId = await getValidParticipantId();
   if (!userId) {
     return NextResponse.json({ error: "Your session has expired. Please log in again." }, { status: 401 });
@@ -33,4 +34,4 @@ export async function POST(request: Request) {
     completedAt: record.completedAt ?? null,
     nextRoute: unlockedTier?.reportHref ?? getNextRoute(record),
   });
-}
+});

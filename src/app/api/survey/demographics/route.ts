@@ -3,12 +3,13 @@ import { db } from "@/lib/db";
 import { getValidParticipantId } from "@/lib/auth/session";
 import { DEMOGRAPHICS } from "@/lib/survey/schema";
 import { getNextRoute } from "@/lib/survey/scoring";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 // Demographics are now collected one field at a time (see DemographicsRunner), so a
 // request only ever carries the fields answered so far — not the full required set.
 // Required-ness is enforced by the stepper UI (a required select can't advance without
 // a value), not by this endpoint.
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   const userId = await getValidParticipantId();
   if (!userId) {
     return NextResponse.json({ error: "Your session has expired. Please log in again." }, { status: 401 });
@@ -39,4 +40,4 @@ export async function POST(request: Request) {
     completedModules: record.completedModules,
     nextRoute: getNextRoute(record),
   });
-}
+});

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/auth/session";
 import { DEMOGRAPHICS, LIKERT_MODULES } from "@/lib/survey/schema";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) {
@@ -10,7 +11,7 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export async function GET() {
+export const GET = withErrorHandling(async () => {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
@@ -58,4 +59,4 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="cognitiverhythm-export-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   });
-}
+});

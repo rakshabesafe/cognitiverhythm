@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/auth/session";
+import { withErrorHandling } from "@/lib/api/withErrorHandling";
 
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
@@ -16,4 +17,4 @@ export async function POST(request: Request) {
   await Promise.all(userIds.map((id) => db.deleteUser(id)));
 
   return NextResponse.json({ deleted: userIds.length });
-}
+});
