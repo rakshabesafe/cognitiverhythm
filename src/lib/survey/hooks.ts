@@ -194,6 +194,11 @@ export function chooseGritHook(facets: GritFacetScore[]): GritHook {
 // and Contextual Performance aren't scored as good/bad — they're read as two vectors of a
 // finite cognitive budget, with every archetype (including the lowest-output one) framed
 // as a deliberate, reasonable allocation strategy rather than a deficiency.
+//
+// The narrative is further personalized by role and tenure, since this study's own
+// framework treats demographic/contextual variables as moderators of these relationships:
+// what a given Task/Contextual split *means* genuinely differs for an individual
+// contributor vs. a technical leader, and for someone 1 year in vs. 12.
 
 export interface EnergyAllocationRowInsight {
   moduleId: "task-performance" | "contextual-performance";
@@ -206,22 +211,146 @@ export interface EnergyAllocationHook {
   id: "dual-core" | "deep-work-specialist" | "ecosystem-enabler" | "conservation-mode";
   archetypeName: string;
   heading: string;
-  bodyParagraphs: [string, string];
+  contextLabel: string;
+  contextText: string;
+  meaningLabel: string;
+  meaningParagraphs: string[];
   pivot: string;
   rowInsights: EnergyAllocationRowInsight[];
+}
+
+type RoleGroup = "ic" | "leader";
+type ExperienceTier = "newcomer" | "mid" | "veteran";
+
+// Demographics' "role" field is exactly "Software Engineer" | "Designer/Architect" |
+// "Manager" (see DEMOGRAPHICS in schema.ts) — Designer/Architect and Manager both carry
+// the "unblock others, shape the system" expectation the narrative below is built around.
+function roleGroupFor(role: string | undefined): RoleGroup {
+  return role === "Software Engineer" ? "ic" : "leader";
+}
+
+function experienceTierFor(experience: string | undefined): ExperienceTier {
+  if (experience === "<= 5") return "newcomer";
+  if (experience === "10+") return "veteran";
+  return "mid";
+}
+
+interface ArchetypeCopy {
+  contextText: string;
+  meaningParagraphs: string[];
+}
+
+function dualCoreCopy(roleGroup: RoleGroup, role: string): ArchetypeCopy {
+  if (roleGroup === "ic") {
+    return {
+      contextText:
+        "As a Software Engineer, your core mandate is deep technical execution, with collaboration as a valuable addition on top of it.",
+      meaningParagraphs: [
+        "Right now you're doing both at a high level — shipping independently and actively supporting your team. That's a genuinely strong signal, but it also means you're running two demanding threads on the same finite cognitive budget.",
+      ],
+    };
+  }
+  return {
+    contextText: `As a ${role}, your typical baseline already leans toward Contextual Performance — mentoring, unblocking others, and shaping how the team works.`,
+    meaningParagraphs: [
+      "Right now you're also matching that with high independent technical execution — effectively doing both the leadership work and the individual-contributor work at once.",
+      "That combination is powerful, but it's also the profile most likely to lead to being spread too thin if it continues unchecked.",
+    ],
+  };
+}
+
+function deepWorkCopy(roleGroup: RoleGroup, role: string): ArchetypeCopy {
+  if (roleGroup === "ic") {
+    return {
+      contextText:
+        "As a Software Engineer, your core mandate is deep technical execution — collaboration is valuable, but it isn't the primary measure of your role.",
+      meaningParagraphs: [
+        "This is the optimal state for a developer. You're successfully protecting your code-commit time from meeting fatigue and constant context-switching.",
+      ],
+    };
+  }
+  return {
+    contextText: `As a ${role}, your typical baseline usually requires heavy Contextual Performance — mentoring developers, designing system boundaries, and guiding team workflows.`,
+    meaningParagraphs: [
+      "Right now, though, your data shows you operating more like an individual contributor — heavily indexed on independent technical problem-solving while pulling back from team-support work.",
+      "When an experienced technical leader shifts this way, it's almost always a symptom of environmental strain — a staffing gap on the team, or a critical deadline pulling you back into the codebase. Short-term, this kind of brute-force execution works. Long-term, relying on a leader to operate as an individual contributor is worth naming as an organizational risk, not just absorbing quietly.",
+    ],
+  };
+}
+
+function ecosystemEnablerCopy(roleGroup: RoleGroup, role: string): ArchetypeCopy {
+  if (roleGroup === "leader") {
+    return {
+      contextText: `As a ${role}, your typical baseline already leans toward Contextual Performance.`,
+      meaningParagraphs: [
+        "Right now you're operating exactly as a servant-leader should — sacrificing some of your own independent tickets to make sure the broader team and architecture hold together. That's the role working as intended.",
+      ],
+    };
+  }
+  return {
+    contextText:
+      "As a Software Engineer, your core mandate is usually deep technical execution first, with collaboration as a valuable addition on top of it.",
+    meaningParagraphs: [
+      "You're currently acting as the glue for your team — genuinely valuable work.",
+      "One thing worth watching: engineers who over-index on team support for an extended stretch sometimes fall behind on the core technical upskilling their own growth depends on. Worth protecting a little independent build time alongside it.",
+    ],
+  };
+}
+
+function conservationModeCopy(tier: ExperienceTier): ArchetypeCopy {
+  if (tier === "newcomer") {
+    return {
+      contextText:
+        "Early in a career, your technical bandwidth is still being built — a reading like this isn't unusual, but it's worth understanding the cause rather than just pushing through.",
+      meaningParagraphs: [
+        "Landing in Conservation Mode this early often means you've hit a steep technical-complexity wall — quietly struggling with a new framework or system rather than asking for help.",
+        "This is exactly the moment to lean on your own spirited initiative and pull in a senior peer — it's a faster path back to momentum than pushing through alone.",
+      ],
+    };
+  }
+  if (tier === "veteran") {
+    return {
+      contextText:
+        "With over a decade in the industry, you've almost certainly seen this pattern before — in yourself and in the people you've mentored.",
+      meaningParagraphs: [
+        "For veteran engineers, stepping into Conservation Mode usually isn't about a lack of skill — it's a strategic retreat.",
+        "You're likely pacing yourself through a disorganized project cycle specifically to avoid the emotional exhaustion that leads to burnout.",
+      ],
+    };
+  }
+  return {
+    contextText:
+      "With a few years of experience behind you, you've generally built real technical capacity — so a pullback like this is more often a deliberate signal than a skills gap.",
+    meaningParagraphs: [
+      "Pulling back into Conservation Mode at this stage usually means you're protecting your bandwidth for something specific — a looming deadline, a personal commitment, or recovery from a recent crunch.",
+      "It's worth naming to yourself what it's actually protecting, so it stays a deliberate choice rather than a slow drift.",
+    ],
+  };
 }
 
 /**
  * Fires after Contextual Performance, which always follows Task Performance in the fixed
  * module order, so both are guaranteed answered by then. A simple 2x2 on Task Performance
  * x Contextual Performance (each read against the same HIGH threshold used everywhere
- * else in this file) picks one of four non-judgmental archetypes.
+ * else in this file) picks one of four non-judgmental archetypes, then role (for the three
+ * archetypes with a clear expectation to compare against) or tenure (for Conservation
+ * Mode, where the same low-low reading means something very different for a newcomer vs.
+ * a veteran) personalizes the narrative. Demographics are always complete by this point —
+ * they're required before any Likert module is reachable — so role/experience are real,
+ * not guessed.
  */
-export function chooseEnergyAllocationHook(answers: Record<string, number>): EnergyAllocationHook {
+export function chooseEnergyAllocationHook(
+  answers: Record<string, number>,
+  demographics: Record<string, string>
+): EnergyAllocationHook {
   const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
   const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
   const taskHigh = taskPerformance >= HIGH;
   const contextualHigh = contextualPerformance >= HIGH;
+
+  const role = demographics.role || "professional";
+  const roleGroup = roleGroupFor(demographics.role);
+  const experienceTier = experienceTierFor(demographics.experience);
 
   const rowInsights: EnergyAllocationRowInsight[] = [
     {
@@ -241,14 +370,15 @@ export function chooseEnergyAllocationHook(answers: Record<string, number>): Ene
   ];
 
   if (taskHigh && contextualHigh) {
+    const copy = dualCoreCopy(roleGroup, role);
     return {
       id: "dual-core",
       archetypeName: "The Dual-Core Contributor",
       heading: "Your Operating Rhythm: The Dual-Core Contributor",
-      bodyParagraphs: [
-        "You're currently running dual processing threads — allocating maximum bandwidth to both your independent technical deliverables and your team's collaborative health.",
-        "This is a high-impact state, but it's cognitively expensive. Make sure you're scheduling dedicated recovery time to protect against rapid burnout.",
-      ],
+      contextLabel: "The context of your role:",
+      contextText: copy.contextText,
+      meaningLabel: `What this means for you as a ${role}:`,
+      meaningParagraphs: copy.meaningParagraphs,
       pivot:
         "Next: running at this intensity means something has to be fueling it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind the pace.",
       rowInsights,
@@ -256,14 +386,15 @@ export function chooseEnergyAllocationHook(answers: Record<string, number>): Ene
   }
 
   if (taskHigh && !contextualHigh) {
+    const copy = deepWorkCopy(roleGroup, role);
     return {
       id: "deep-work-specialist",
       archetypeName: "The Deep-Work Specialist",
       heading: "Your Operating Rhythm: The Deep-Work Specialist",
-      bodyParagraphs: [
-        "You're channeling your cognitive energy heavily into technical execution. To hit your milestones, you're intentionally routing focus away from extra team responsibilities.",
-        "This is a highly effective strategy for protecting your deep-work state from constant interruptions. To maintain team visibility without sacrificing focus, try contributing to asynchronous documentation rather than extra sync meetings.",
-      ],
+      contextLabel: "The context of your role:",
+      contextText: copy.contextText,
+      meaningLabel: `What this means for you as a ${role}:`,
+      meaningParagraphs: copy.meaningParagraphs,
       pivot:
         "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's shaping this focus.",
       rowInsights,
@@ -271,28 +402,36 @@ export function chooseEnergyAllocationHook(answers: Record<string, number>): Ene
   }
 
   if (!taskHigh && contextualHigh) {
+    const copy = ecosystemEnablerCopy(roleGroup, role);
     return {
       id: "ecosystem-enabler",
       archetypeName: "The Ecosystem Enabler",
       heading: "Your Operating Rhythm: The Ecosystem Enabler",
-      bodyParagraphs: [
-        "You're investing your primary bandwidth into unblocking your colleagues and maintaining the team's operational flow, sometimes at the expense of your own independent sprint tickets.",
-        "Your invisible leadership is holding the architecture together, even though traditional metrics might miss it. Block out \"do-not-disturb\" windows to make sure your own technical deliverables don't get permanently sidelined by team support.",
-      ],
+      contextLabel: "The context of your role:",
+      contextText: copy.contextText,
+      meaningLabel: `What this means for you as a ${role}:`,
+      meaningParagraphs: copy.meaningParagraphs,
       pivot:
         "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind this pattern.",
       rowInsights,
     };
   }
 
+  const copy = conservationModeCopy(experienceTier);
+  const meaningLabel =
+    experienceTier === "newcomer"
+      ? "What this means early in your career:"
+      : experienceTier === "veteran"
+        ? "What this means as a veteran engineer:"
+        : "What this means at this stage of your career:";
   return {
     id: "conservation-mode",
     archetypeName: "Conservation Mode",
     heading: "Your Operating Rhythm: Conservation Mode",
-    bodyParagraphs: [
-      "Your data indicates you're currently operating in a bandwidth-constrained state — actively pacing your technical deliverables and limiting extra collaborative commitments.",
-      "In high-velocity engineering environments, this is a natural and necessary self-protection strategy. When the friction in a system gets too high, stepping back into Conservation Mode is what prevents total burnout.",
-    ],
+    contextLabel: "The context of your experience:",
+    contextText: copy.contextText,
+    meaningLabel,
+    meaningParagraphs: copy.meaningParagraphs,
     pivot:
       "Next: you're clearly conserving energy, which means something in your environment is likely draining it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to find the source of the drain.",
     rowInsights,

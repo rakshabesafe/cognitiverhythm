@@ -17,7 +17,7 @@ export default async function TechTeamReportPage() {
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
 
-  const hook = chooseEnergyAllocationHook(responses.answers);
+  const hook = chooseEnergyAllocationHook(responses.answers, responses.demographics);
   const rows = computeBenchmarkForModules(TIER.moduleIds, responses.answers, peers);
 
   return (
@@ -29,8 +29,20 @@ export default async function TechTeamReportPage() {
       responses={responses}
     >
       <EnergyAllocationTable rows={rows} insights={hook.rowInsights} />
-      <p className="text-foreground/90">{hook.bodyParagraphs[0]}</p>
-      <p className="text-foreground/90">{hook.bodyParagraphs[1]}</p>
+
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.contextLabel}</p>
+        <p className="text-sm text-foreground/90">{hook.contextText}</p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-foreground">{hook.meaningLabel}</p>
+        {hook.meaningParagraphs.map((paragraph, i) => (
+          <p key={i} className="text-foreground/90">
+            {paragraph}
+          </p>
+        ))}
+      </div>
     </ReportShell>
   );
 }
