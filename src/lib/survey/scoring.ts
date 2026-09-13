@@ -163,6 +163,56 @@ export function computeGritFacetBreakdown(
   }).sort((a, b) => b.yourScore - a.yourScore);
 }
 
+export interface SectionScore {
+  id: string;
+  label: string;
+  yourScore: number;
+  peerAverage: number | null;
+  peerCount: number;
+  max: number;
+}
+
+/**
+ * Breaks a module down by its items' `section` groupings (e.g. Technostress splits into
+ * Overload / Complexity / Uncertainty), scored against live in-study peers and sorted by
+ * the participant's own score, highest first. Same ≥3-peer rule as everywhere else: no
+ * peer figure is shown until enough real peers have answered that group.
+ */
+export function computeSectionBreakdown(
+  moduleId: string,
+  answers: Record<string, number>,
+  peerResponses: { answers: Record<string, number> }[]
+): SectionScore[] {
+  const mod = LIKERT_MODULES.find((m) => m.id === moduleId);
+  if (!mod) return [];
+  const max = SCALES[mod.scale].labels.length;
+
+  const sections: string[] = [];
+  for (const item of mod.items) {
+    if (item.section && !sections.includes(item.section)) sections.push(item.section);
+  }
+
+  return sections
+    .map((section) => {
+      const codes = mod.items.filter((i) => i.section === section).map((i) => i.code);
+      const yourScore = facetMean(codes, answers) ?? 0;
+      const peerMeans = peerResponses
+        .map((r) => facetMean(codes, r.answers))
+        .filter((m): m is number => m !== null);
+      const peerAverage =
+        peerMeans.length >= 3 ? peerMeans.reduce((a, b) => a + b, 0) / peerMeans.length : null;
+      return {
+        id: section,
+        label: section,
+        yourScore: Math.round(yourScore * 100) / 100,
+        peerAverage: peerAverage !== null ? Math.round(peerAverage * 100) / 100 : null,
+        peerCount: peerMeans.length,
+        max,
+      };
+    })
+    .sort((a, b) => b.yourScore - a.yourScore);
+}
+
 export interface BenchmarkRow {
   moduleId: string;
   title: string;
@@ -235,72 +285,9 @@ export function computeBenchmarkForModules(
   );
 }
 
-// --- Confidence (Self-Efficacy) narrative -----------------------------------
-
-export interface ConfidenceNarrative {
-  band: Band;
-  heading: string;
-  body: string;
-}
-
-export function confidenceNarrative(answers: Record<string, number>): ConfidenceNarrative {
-  const pct = pctForModule("self-efficacy", answers);
-  const band = bandFor(pct);
-
-  if (band === "High") {
-    return {
-      band,
-      heading: "You trust your own hands on the wheel.",
-      body: "Your answers show strong occupational self-efficacy — you consistently believe you can find a way through whatever your job throws at you, and that belief tends to be self-fulfilling: it's what lets grit and adaptability actually convert into sustained performance instead of burnout.",
-    };
-  }
-  if (band === "Moderate") {
-    return {
-      band,
-      heading: "Your confidence holds up — most of the time.",
-      body: "You generally trust your ability to handle what comes your way, though it isn't unshakeable yet. That's a normal, workable place to be — confidence like this tends to grow fastest from small, concrete wins rather than from reassurance alone.",
-    };
-  }
-  return {
-    band,
-    heading: "Your skills may be ahead of your confidence in them.",
-    body: "Your answers suggest you're less sure of your ability to handle job demands than your effort and adaptability elsewhere would predict. That gap is worth naming — low self-efficacy can quietly cap how much of your real capability actually shows up at work, independent of how capable you actually are.",
-  };
-}
-
-// --- Stress (Technostress + AI Job Anxiety) narrative ------------------------
-
-export interface StressNarrative {
-  band: Band;
-  heading: string;
-  body: string;
-}
-
-export function stressNarrative(answers: Record<string, number>): StressNarrative {
-  const technostress = pctForModule("technostress", answers);
-  const aiAnxiety = pctForModule("ai-anxiety", answers);
-  const combined = (technostress + aiAnxiety) / 2;
-  const band = bandFor(combined);
-
-  if (band === "High") {
-    return {
-      band,
-      heading: "The pace of technology is genuinely straining you right now.",
-      body: "Both your technostress and your AI-related anxiety are reading high. That's not a personal shortcoming — it's a structural signal that the rate of technological change around you currently exceeds what feels sustainable to absorb. Left unaddressed, this combination is one of the clearest precursors to burnout.",
-    };
-  }
-  if (band === "Moderate") {
-    return {
-      band,
-      heading: "You're feeling some of the pressure, not all of it.",
-      body: "Your answers show a moderate amount of strain from workplace technology and AI's pace of change — noticeable, but not yet overwhelming. This is a good point to build habits that keep it from climbing further.",
-    };
-  }
-  return {
-    band,
-    heading: "You're currently absorbing technology's pace well.",
-    body: "Your technostress and AI-anxiety readings are both low — the pace of technological change at work doesn't currently feel like a threat to you. That's a real asset worth protecting as demands shift.",
-  };
+/** Band for a single module's score, used by the narrative hooks in hooks.ts. */
+export function bandForModule(moduleId: string, answers: Record<string, number>): Band {
+  return bandFor(pctForModule(moduleId, answers));
 }
 
 // --- Operating profile / archetype -----------------------------------------

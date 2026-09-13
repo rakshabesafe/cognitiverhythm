@@ -1,11 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import { chooseGritHook } from "@/lib/survey/hooks";
-import { computeGritFacetBreakdown, computeModulePeerStat } from "@/lib/survey/scoring";
-import { GritFacetTable } from "@/components/survey/GritFacetTable";
-import { LogoutButton } from "@/components/ui/LogoutButton";
+import { computeGritFacetBreakdown, computeModulePeerStat, GRIT_OVERALL_REFERENCE } from "@/lib/survey/scoring";
+import { PROFILE_TIERS } from "@/lib/survey/tiers";
+import { ReportShell } from "@/components/survey/ReportShell";
+import { ScoreTable } from "@/components/survey/ScoreTable";
+
+const TIER = PROFILE_TIERS.find((t) => t.id === "grit")!;
 
 export default async function GritReportPage() {
   const userId = await requireParticipant();
@@ -14,27 +16,25 @@ export default async function GritReportPage() {
 
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
-  const peerTechnostress = computeModulePeerStat("technostress", peers);
   const facets = computeGritFacetBreakdown(responses.answers, peers);
-  const hook = chooseGritHook(facets, peerTechnostress);
+  const hook = chooseGritHook(facets, computeModulePeerStat("technostress", peers));
+
+  const overallYourScore = facets.reduce((sum, f) => sum + f.yourScore, 0) / facets.length;
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
-      <div className="flex items-center justify-between">
-        <Link href="/dashboard" className="text-sm text-muted underline underline-offset-2">
-          ← Your Profile
-        </Link>
-        <LogoutButton />
-      </div>
-
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-accent">🔥 Grit Profile</p>
-        <h1 className="mt-1 text-2xl font-semibold text-foreground">{hook.heading}</h1>
-      </div>
-
-      <p className="text-foreground/90">{hook.stat}</p>
-      <GritFacetTable facets={hook.facets} />
-      <p className="text-muted">{hook.pivot}</p>
-    </main>
+    <ReportShell tier={TIER} heading={hook.heading} stat={hook.stat} pivot={hook.pivot} responses={responses}>
+      <ScoreTable
+        title="Your MDGS profile"
+        rows={facets.map((f) => ({
+          id: f.id,
+          label: f.label,
+          yourScore: f.yourScore,
+          peerAverage: f.peerAverage,
+          referenceAverage: f.referenceAverage,
+          max: 5,
+        }))}
+        footnote={`Your overall grit score is ${overallYourScore.toFixed(2)} / 5 — the typical score is ${GRIT_OVERALL_REFERENCE.toFixed(2)} / 5.`}
+      />
+    </ReportShell>
   );
 }

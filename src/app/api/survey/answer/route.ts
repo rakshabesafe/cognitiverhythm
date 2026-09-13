@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getValidParticipantId } from "@/lib/auth/session";
 import { findModuleForItemCode, SCALES } from "@/lib/survey/schema";
 import { getNextRoute } from "@/lib/survey/scoring";
+import { tierUnlockedByModule } from "@/lib/survey/tiers";
 
 export async function POST(request: Request) {
   const userId = await getValidParticipantId();
@@ -24,9 +25,12 @@ export async function POST(request: Request) {
   }
 
   const record = await db.saveAnswer(userId, itemCode, value);
+  // When this answer completed a tier, send them to the report they just unlocked; that
+  // report's own "continue" button carries them on into the next section.
+  const unlockedTier = tierUnlockedByModule(mod.id, record.completedModules);
   return NextResponse.json({
     completedModules: record.completedModules,
     completedAt: record.completedAt ?? null,
-    nextRoute: getNextRoute(record),
+    nextRoute: unlockedTier?.reportHref ?? getNextRoute(record),
   });
 }

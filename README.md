@@ -40,26 +40,35 @@ needed; `vercel dev` is optional and only for local testing.
 
 Participant flow: `/register` or `/login` → `/consent` → auto-forwards into
 `/survey/demographics` (one field per screen, opens with a welcome + privacy-assurance
-intro) → each Likert section in a fixed order, **Grit first** (`/survey/grit`, then
-`/survey/task-performance`, `/survey/contextual-performance`, `/survey/technostress`,
-`/survey/ai-anxiety`, `/survey/self-efficacy`), each opening with its own short "why this
-matters" intro screen. Immediately after Grit, a brief "Analyzing your operating
-rhythm…" moment leads into a personalized mid-flow insight (see `src/lib/survey/hooks.ts`)
-before continuing into the performance sections.
+intro) → each Likert section in a fixed order, each opening with its own short "why this
+matters" intro screen.
 
-Framed to the participant as **unlocking their profile**, not filling out a form: the six
-Likert modules are grouped into four tiers (`src/lib/survey/tiers.ts`) — **Grit Profile**
-(`/reports/grit`, unlocked after Grit), **Technology & Team Profile** (`/reports/tech-team`,
-unlocked after Task Performance + Contextual Performance), **Stress Profile**
-(`/reports/stress`, unlocked after Technostress + AI Job Anxiety — kept separate from
-Technology & Team since it's a strain reading, not a performance one), and **Confidence
-Profile** (`/reports/confidence`, unlocked after Self-Efficacy) — plus the **Full Combined
-Report** (`/results`: peer benchmark, operating profile, action plan), unlocked at 100%. `/dashboard` ("Your Profile") is the persistent menu: a locked/unlocked
-card per tier the participant can revisit any time, plus a single "Continue unlocking your
-profile" call to action that resumes the guided sequential flow. A tier report page redirects
-back to `/dashboard` if its modules aren't complete yet, so unlocks can't be skipped ahead by
-URL. Admin flow: `/admin` → `/admin/dashboard` (stats + CSV export). The admin console is
-also reachable by signing in with admin credentials at the main `/login` form.
+Framed to the participant as **unlocking their profile**, not filling out a form. The six
+Likert modules are grouped into four tiers (`src/lib/survey/tiers.ts`), ordered to follow
+the study's own theoretical path — **traits → environment → mindset → output** — so each
+unlocked report ends on a cliffhanger into the next:
+
+| # | Profile | Unlocked after | Report | Pivots into |
+|---|---------|----------------|--------|-------------|
+| 1 | 🌱 **Grit Profile** | Grit | `/reports/grit` | the friction testing that grit |
+| 2 | ⚡ **Stress Profile** | Technostress + AI Job Anxiety | `/reports/stress` | whether that pressure is draining confidence |
+| 3 | 🧠 **Confidence Profile** | Self-Efficacy | `/reports/confidence` | how confidence converts into output |
+| 4 | 🤝 **Technology & Team Profile** | Task + Contextual Performance | `/reports/tech-team` | the full combined report |
+| 5 | 📊 **Full Combined Report** | everything (100%) | `/results` | — |
+
+Answering the last item of a tier holds on a brief "analyzing…" beat (`UnlockFlow`) and
+then reveals that tier's report, rather than snapping straight to the next section. Each
+report is a real page the participant can revisit any time, and ends with a "continue"
+button into whatever comes next; the forward-looking pivot copy hides itself once the
+following profile is already unlocked. All narrative copy lives in `src/lib/survey/hooks.ts`
+(one `choose*Hook` per tier, branching on the participant's own scores), while the numbers
+behind it come from `src/lib/survey/scoring.ts`.
+
+`/dashboard` ("Your Profile") is the persistent menu: a locked/unlocked card per tier plus
+a single "Continue unlocking your profile" call to action that resumes the guided flow. A
+tier report redirects back to `/dashboard` if its modules aren't complete, so unlocks can't
+be skipped ahead by URL. Admin flow: `/admin` → `/admin/dashboard` (stats + CSV export).
+The admin console is also reachable by signing in with admin credentials at `/login`.
 
 # Product Requirements Document (PRD): Cognitive Rhythm & Resilience
 
@@ -81,11 +90,11 @@ The incentive for completing it honestly and fully is the personalized report it
 ## 3. Functional Requirements: Participant Flow
 * **Authentication:** Simple email and password registration/login. Email acts as the unique identifier to prevent duplicate submissions. No complex password rules or Single Sign-On (SSO) required.
 * **Session Management:** The application must remember the user's state (via a signed cookie) across sessions to minimize re-login friction on the same device. If a session outlives the account it points to (e.g. local data was reset), the app must degrade gracefully — redirect to login — never crash.
-* **Guided, Sequential Flow:** After consent, participants are auto-routed through one section at a time, in a fixed order — **About You (demographics) first, then Grit, Task Performance, Contextual Performance, Technostress, AI Job Anxiety, and Self-Efficacy** — rather than choosing freely from a menu. Finishing a section automatically advances into the next one.
+* **Guided, Sequential Flow:** After consent, participants are auto-routed through one section at a time, in a fixed order — **About You (demographics) first, then Grit, Technostress, AI Job Anxiety, Self-Efficacy, Task Performance, and Contextual Performance** — rather than choosing freely from a menu. That order is deliberate: it walks the study's own theoretical path (traits → environment → mindset → output) so each unlocked profile sets up a genuine question the next section answers. Finishing a section automatically advances into the next one.
 * **Section Intros:** Every section, including About You, opens with a short, motivating "why this matters" screen (an emoji, a one-line tagline, 1–2 sentences of relevance) before any questions appear. The About You intro explicitly reassures participants that their data is 100% private, used only in aggregate for academic research, and never sold, shared, or used for any commercial purpose.
-* **Mid-Flow Insight Hooks:** Two points in the flow pause for a brief "Analyzing…" moment before revealing a personalized, puzzling-but-informative statistic: immediately after Grit (pivoting into why the performance sections matter) and immediately after Contextual Performance (pivoting into Technostress). Each statistic is drawn from the participant's own answers plus real accumulated peer data where enough exists — never a fabricated number. The Grit hook additionally renders a full facet breakdown table (the four official Multi-Dimensional Grit Scale dimensions — Perseverance of Effort, Adaptability to Situations, Spirited Initiative, Steadfastness in Adverse Situations), each row showing the participant's own score against a fixed reference average (validated MDGS norms for this exact instrument — see `GRIT_FACET_REFERENCE` in `src/lib/survey/scoring.ts`) and, once ≥3 in-study peers have answered that facet, the live peer average too. The UI never names or cites the source of the reference figures to participants — no author, year, or paper reference appears anywhere in the app's user-facing copy. This sustains momentum past the point where interest most commonly drops off.
+* **Unlock Moments & Cliffhangers:** Completing the last item of a tier pauses on a brief "Analyzing…" beat, then reveals that tier's report — the reward for the data just given. Every report states what it found, shows the numbers behind it, and ends on a hook into the next profile ("some engineers lose their confidence under this much pressure, while others rely on grit — let's measure yours"), so motivation to continue comes from curiosity about themselves rather than a progress bar. Each statistic is drawn from the participant's own answers plus real accumulated peer data where enough exists — never a fabricated number. The Grit report additionally renders a full facet breakdown table (the four official Multi-Dimensional Grit Scale dimensions — Perseverance of Effort, Adaptability to Situations, Spirited Initiative, Steadfastness in Adverse Situations), each row showing the participant's own score against a fixed reference average (validated MDGS norms for this exact instrument — see `GRIT_FACET_REFERENCE` in `src/lib/survey/scoring.ts`) and, once ≥3 in-study peers have answered that facet, the live peer average too; the Stress report likewise breaks Technostress into its Overload / Complexity / Uncertainty sub-dimensions so the copy can name whichever one is actually driving the load. The UI never names or cites the source of the reference figures to participants — no author, year, or paper reference appears anywhere in the app's user-facing copy. This sustains momentum past the point where interest most commonly drops off.
 * **One-Item-at-a-Time Disclosure:** Both the demographic intake and every Likert section present a single item per screen — never a list or a long form — to minimize cognitive load and avoid the feeling of "filling out a form."
-* **Unlocking Profile Menu:** `/dashboard` ("Your Profile," reachable via "Save & exit") is framed as a menu of personal reports being unlocked, not a survey progress tracker — a locked/unlocked card per tier (Grit Profile, Technology & Team Profile, Stress Profile, Confidence Profile, Full Combined Report) with a single "Continue unlocking your profile" action, rather than a raw list of section names and item counts. Unlocked cards link straight to that tier's persistent report page; locked cards resume the guided sequential flow.
+* **Unlocking Profile Menu:** `/dashboard` ("Your Profile," reachable via "Save & exit") is framed as a menu of personal reports being unlocked, not a survey progress tracker — a locked/unlocked card per tier (Grit, Stress, Confidence, Technology & Team, Full Combined Report) with a single "Continue unlocking your profile" action, rather than a raw list of section names and item counts. Unlocked cards link straight to that tier's persistent report page; locked cards resume the guided sequential flow.
 * **Auto-Save:** Every answer — a Likert selection or a single demographic field — is committed to storage immediately, with a "Saved" toast confirmation, ensuring zero data loss if a participant closes the tab. Resuming a section lands on the first genuinely unanswered item, not the start.
 
 ## 4. Functional Requirements: Administrator Flow

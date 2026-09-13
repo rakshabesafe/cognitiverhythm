@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
@@ -9,14 +8,16 @@ import {
   computeModulePeerMeans,
   percentileRank,
 } from "@/lib/survey/scoring";
-import { LogoutButton } from "@/components/ui/LogoutButton";
+import { PROFILE_TIERS } from "@/lib/survey/tiers";
+import { BenchmarkRows } from "@/components/survey/BenchmarkRows";
+import { ReportShell } from "@/components/survey/ReportShell";
 
-const MODULE_IDS = ["task-performance", "contextual-performance"];
+const TIER = PROFILE_TIERS.find((t) => t.id === "tech-team")!;
 
 export default async function TechTeamReportPage() {
   const userId = await requireParticipant();
   const responses = await db.getResponses(userId);
-  if (!MODULE_IDS.every((id) => responses.completedModules.includes(id))) redirect("/dashboard");
+  if (!TIER.moduleIds.every((id) => responses.completedModules.includes(id))) redirect("/dashboard");
 
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
@@ -25,56 +26,11 @@ export default async function TechTeamReportPage() {
   const peerMeans = computeModulePeerMeans("contextual-performance", peers);
   const percentile = percentileRank(myContextualMean, peerMeans);
   const hook = choosePerformanceHook(responses.answers, { percentile, count: peerMeans.length });
-
-  const rows = computeBenchmarkForModules(MODULE_IDS, responses.answers, peers);
+  const rows = computeBenchmarkForModules(TIER.moduleIds, responses.answers, peers);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
-      <div className="flex items-center justify-between">
-        <Link href="/dashboard" className="text-sm text-muted underline underline-offset-2">
-          ← Your Profile
-        </Link>
-        <LogoutButton />
-      </div>
-
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-accent">🤝 Technology &amp; Team Profile</p>
-        <h1 className="mt-1 text-2xl font-semibold text-foreground">{hook.heading}</h1>
-      </div>
-
-      <p className="text-foreground/90">{hook.stat}</p>
-      <p className="text-muted">{hook.pivot}</p>
-
-      <div className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <div key={row.moduleId} className="rounded-2xl border border-border bg-surface p-4">
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <h3 className="font-medium text-foreground">
-                {row.emoji} {row.title}
-              </h3>
-              <span className="whitespace-nowrap text-sm text-foreground">
-                {row.yourScore.toFixed(1)} / {row.max.toFixed(1)}
-              </span>
-            </div>
-            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${((row.yourScore - 1) / (row.max - 1)) * 100}%` }}
-              />
-            </div>
-            <p className="text-sm text-muted">
-              {row.comparisonText}
-              {row.peerAverage !== null && (
-                <span>
-                  {" "}
-                  Peer average: {row.peerAverage.toFixed(2)} / {row.max.toFixed(1)} (
-                  {row.peerCount} {row.peerCount === 1 ? "peer" : "peers"}).
-                </span>
-              )}
-            </p>
-          </div>
-        ))}
-      </div>
-    </main>
+    <ReportShell tier={TIER} heading={hook.heading} stat={hook.stat} pivot={hook.pivot} responses={responses}>
+      <BenchmarkRows rows={rows} />
+    </ReportShell>
   );
 }
