@@ -1,7 +1,6 @@
 // All participant-facing narrative copy for the unlocked profile reports lives here.
 // Each report ends on a "pivot" — a hook into the profile that comes next: traits (Grit)
 // → output (Technology & Team) → environment (Stress) → mindset (Confidence).
-import { GRIT_FACETS } from "./schema";
 import {
   bandForModule,
   HIGH,
@@ -14,10 +13,6 @@ import {
 
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
 const CONTEXTUAL_PERFORMANCE_ITEMS = ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CP7", "CP8"];
-
-function facetItems(id: string): string[] {
-  return GRIT_FACETS.find((f) => f.id === id)?.items ?? [];
-}
 
 function meanOf(codes: string[], answers: Record<string, number>): number {
   const values = codes.map((c) => answers[c]).filter((v): v is number => typeof v === "number");
@@ -192,70 +187,115 @@ export function chooseGritHook(facets: GritFacetScore[]): GritHook {
 }
 
 // --- 2. Technology & Team Profile → pivots into Stress -------------------------
+//
+// Framed as an "Energy Allocation Profile," not a performance evaluation: performance is
+// a sensitive topic, and labeling someone "Low" here would trigger defensiveness and
+// undermine the psychological safety the rest of the study depends on. Task Performance
+// and Contextual Performance aren't scored as good/bad — they're read as two vectors of a
+// finite cognitive budget, with every archetype (including the lowest-output one) framed
+// as a deliberate, reasonable allocation strategy rather than a deficiency.
 
-export interface PerformanceHook {
-  id: "network-influence" | "effort-to-impact" | "resilience-roi" | "balanced-output";
-  heading: string;
-  stat: string;
-  pivot: string;
+export interface EnergyAllocationRowInsight {
+  moduleId: "task-performance" | "contextual-performance";
+  /** Short, neutral verb — "Channeling"/"Conserving"/"Investing"/"Protecting" — never "Low". */
+  label: string;
+  text: string;
 }
 
-interface PeerPercentile {
-  percentile: number | null;
-  count: number;
+export interface EnergyAllocationHook {
+  id: "dual-core" | "deep-work-specialist" | "ecosystem-enabler" | "conservation-mode";
+  archetypeName: string;
+  heading: string;
+  bodyParagraphs: [string, string];
+  pivot: string;
+  rowInsights: EnergyAllocationRowInsight[];
 }
 
 /**
  * Fires after Contextual Performance, which always follows Task Performance in the fixed
- * module order, so both are guaranteed answered by then. contextualPercentile is computed
- * from real peer data only — omitted from the copy entirely when there isn't enough of it
- * yet, rather than inventing a number.
+ * module order, so both are guaranteed answered by then. A simple 2x2 on Task Performance
+ * x Contextual Performance (each read against the same HIGH threshold used everywhere
+ * else in this file) picks one of four non-judgmental archetypes.
  */
-export function choosePerformanceHook(answers: Record<string, number>, contextualPercentile: PeerPercentile): PerformanceHook {
-  const perseveranceOfEffort = pctOf5(meanOf(facetItems("perseveranceOfEffort"), answers));
-  const adaptability = pctOf5(meanOf(facetItems("adaptability"), answers));
+export function chooseEnergyAllocationHook(answers: Record<string, number>): EnergyAllocationHook {
   const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
   const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
+  const taskHigh = taskPerformance >= HIGH;
+  const contextualHigh = contextualPerformance >= HIGH;
 
-  const pivot =
-    "Now that we've seen your actual execution, let's measure the environmental pressure behind it — technostress and AI anxiety — and see how it's really landing on you.";
+  const rowInsights: EnergyAllocationRowInsight[] = [
+    {
+      moduleId: "task-performance",
+      label: taskHigh ? "Channeling" : "Conserving",
+      text: taskHigh
+        ? "You're routing significant bandwidth into technical execution."
+        : "You're pacing your technical output.",
+    },
+    {
+      moduleId: "contextual-performance",
+      label: contextualHigh ? "Investing" : "Protecting",
+      text: contextualHigh
+        ? "You're allocating bandwidth to unblocking and supporting your team."
+        : "You're limiting extra collaborative commitments.",
+    },
+  ];
 
-  if (contextualPerformance >= HIGH && contextualPerformance >= taskPerformance) {
-    const { percentile, count } = contextualPercentile;
+  if (taskHigh && contextualHigh) {
     return {
-      id: "network-influence",
-      heading: "This is your actual execution.",
-      stat:
-        percentile !== null
-          ? `Your contextual performance puts you ahead of about ${percentile}% of the ${count} peers who've reached this section so far — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.`
-          : "Your contextual performance stands out — you're not just executing tasks, you're operating as a knowledge hub for the people around you. That invisible collaborative work is real output, even though it rarely shows up on a sprint board.",
-      pivot,
+      id: "dual-core",
+      archetypeName: "The Dual-Core Contributor",
+      heading: "Your Operating Rhythm: The Dual-Core Contributor",
+      bodyParagraphs: [
+        "You're currently running dual processing threads — allocating maximum bandwidth to both your independent technical deliverables and your team's collaborative health.",
+        "This is a high-impact state, but it's cognitively expensive. Make sure you're scheduling dedicated recovery time to protect against rapid burnout.",
+      ],
+      pivot:
+        "Next: running at this intensity means something has to be fueling it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind the pace.",
+      rowInsights,
     };
   }
 
-  if (perseveranceOfEffort >= HIGH && taskPerformance >= HIGH) {
+  if (taskHigh && !contextualHigh) {
     return {
-      id: "effort-to-impact",
-      heading: "This is your actual execution.",
-      stat: "Your high effort and perseverance are clearly translating into strong task execution. But the pattern in your answers suggests you may be getting there through sheer force rather than efficiency — a sustainable strategy for a sprint, not for a career.",
-      pivot,
+      id: "deep-work-specialist",
+      archetypeName: "The Deep-Work Specialist",
+      heading: "Your Operating Rhythm: The Deep-Work Specialist",
+      bodyParagraphs: [
+        "You're channeling your cognitive energy heavily into technical execution. To hit your milestones, you're intentionally routing focus away from extra team responsibilities.",
+        "This is a highly effective strategy for protecting your deep-work state from constant interruptions. To maintain team visibility without sacrificing focus, try contributing to asynchronous documentation rather than extra sync meetings.",
+      ],
+      pivot:
+        "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's shaping this focus.",
+      rowInsights,
     };
   }
 
-  if (adaptability >= HIGH && taskPerformance >= HIGH) {
+  if (!taskHigh && contextualHigh) {
     return {
-      id: "resilience-roi",
-      heading: "This is your actual execution.",
-      stat: "You're successfully converting your adaptability into consistent task execution — a sign your operating rhythm holds up well even as things shift around you.",
-      pivot,
+      id: "ecosystem-enabler",
+      archetypeName: "The Ecosystem Enabler",
+      heading: "Your Operating Rhythm: The Ecosystem Enabler",
+      bodyParagraphs: [
+        "You're investing your primary bandwidth into unblocking your colleagues and maintaining the team's operational flow, sometimes at the expense of your own independent sprint tickets.",
+        "Your invisible leadership is holding the architecture together, even though traditional metrics might miss it. Block out \"do-not-disturb\" windows to make sure your own technical deliverables don't get permanently sidelined by team support.",
+      ],
+      pivot:
+        "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind this pattern.",
+      rowInsights,
     };
   }
 
   return {
-    id: "balanced-output",
-    heading: "This is your actual execution.",
-    stat: "Your deep technical work and your collaborative work are moving together in a balanced way, with no obvious strain showing up between them.",
-    pivot,
+    id: "conservation-mode",
+    archetypeName: "Conservation Mode",
+    heading: "Your Operating Rhythm: Conservation Mode",
+    bodyParagraphs: [
+      "Your data indicates you're currently operating in a bandwidth-constrained state — actively pacing your technical deliverables and limiting extra collaborative commitments.",
+      "In high-velocity engineering environments, this is a natural and necessary self-protection strategy. When the friction in a system gets too high, stepping back into Conservation Mode is what prevents total burnout.",
+    ],
+    pivot:
+      "Next: you're clearly conserving energy, which means something in your environment is likely draining it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to find the source of the drain.",
+    rowInsights,
   };
 }
 

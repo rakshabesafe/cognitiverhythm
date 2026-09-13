@@ -1,15 +1,10 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { choosePerformanceHook } from "@/lib/survey/hooks";
-import {
-  computeBenchmarkForModules,
-  computeModuleMeanForAnswers,
-  computeModulePeerMeans,
-  percentileRank,
-} from "@/lib/survey/scoring";
+import { chooseEnergyAllocationHook } from "@/lib/survey/hooks";
+import { computeBenchmarkForModules } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
-import { BenchmarkRows } from "@/components/survey/BenchmarkRows";
+import { EnergyAllocationTable } from "@/components/survey/EnergyAllocationTable";
 import { ReportShell } from "@/components/survey/ReportShell";
 
 const TIER = PROFILE_TIERS.find((t) => t.id === "tech-team")!;
@@ -22,15 +17,20 @@ export default async function TechTeamReportPage() {
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
 
-  const myContextualMean = computeModuleMeanForAnswers("contextual-performance", responses.answers) ?? 0;
-  const peerMeans = computeModulePeerMeans("contextual-performance", peers);
-  const percentile = percentileRank(myContextualMean, peerMeans);
-  const hook = choosePerformanceHook(responses.answers, { percentile, count: peerMeans.length });
+  const hook = chooseEnergyAllocationHook(responses.answers);
   const rows = computeBenchmarkForModules(TIER.moduleIds, responses.answers, peers);
 
   return (
-    <ReportShell tier={TIER} heading={hook.heading} stat={hook.stat} pivot={hook.pivot} responses={responses}>
-      <BenchmarkRows rows={rows} />
+    <ReportShell
+      tier={TIER}
+      heading={hook.heading}
+      stat="You have the psychological toolkit. Now let's look at how you're currently allocating that resilience across your daily workload — your finite cognitive battery, split across two vectors: Technical Execution and Collaborative Support."
+      pivot={hook.pivot}
+      responses={responses}
+    >
+      <EnergyAllocationTable rows={rows} insights={hook.rowInsights} />
+      <p className="text-foreground/90">{hook.bodyParagraphs[0]}</p>
+      <p className="text-foreground/90">{hook.bodyParagraphs[1]}</p>
     </ReportShell>
   );
 }
