@@ -1,8 +1,8 @@
 import { isDemographicsComplete, LIKERT_MODULES } from "@/lib/survey/schema";
 
 /**
- * Shared by every DataStore implementation so "is this participant done" logic
- * can't drift between the JSON store and the MongoDB store.
+ * "Is this participant done" logic, kept separate from mongoStore.ts so it stays
+ * easy to unit-test independent of the database.
  */
 export function computeCompletion(
   demographics: Record<string, string>,

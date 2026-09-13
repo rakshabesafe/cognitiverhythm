@@ -4,14 +4,15 @@ import { computeCompletion } from "./completion";
 import type { DataStore, ResponseRecord, UserRecord } from "./types";
 
 // Everything here is lazy — reading env vars / opening a connection only happens the
-// first time a DataStore method is actually called, never at import time. That lets
-// db/index.ts import this module unconditionally without requiring MONGODB_URI to be
-// set when the JSON store is the one actually in use.
+// first time a DataStore method is actually called, never at import time.
 
 function getUri(): string {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    throw new Error("MONGODB_URI is not set. Add it to .env.local (see .env.local.example).");
+    throw new Error(
+      "MONGODB_URI is not set. Set it in .env.local for local dev (see .env.local.example), " +
+        "or in your host's environment variables (e.g. Vercel Project Settings → Environment Variables) for deployment."
+    );
   }
   return uri;
 }

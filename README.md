@@ -3,32 +3,40 @@
 ## Getting Started
 
 Stack: Next.js 16 (App Router) + TypeScript + Tailwind CSS. Participant/response data is
-persisted behind a `DataStore` interface (`src/lib/db/`) with two interchangeable
-implementations:
-- **MongoDB** (`src/lib/db/mongoStore.ts`) — used automatically whenever `MONGODB_URI` is
-  set in `.env.local`. This is the intended storage for real data collection.
-- **Local JSON files** under `data/` (git-ignored) — the automatic fallback when
-  `MONGODB_URI` is unset, so `npm run dev` still works with zero setup.
+persisted behind a `DataStore` interface (`src/lib/db/`), implemented exclusively by
+**MongoDB** (`src/lib/db/mongoStore.ts`) — there is no local filesystem fallback. This is
+deliberate: serverless hosts like Vercel don't provide a writable, persistent filesystem
+(only an ephemeral `/tmp` that doesn't survive between requests), so a file-based store
+would silently lose data in production. `src/lib/db/index.ts` is the single swap point if
+a different backend is ever needed — nothing else in the app knows or cares which one is
+in use, it just needs to satisfy the `DataStore` interface.
 
-The active implementation is chosen once, in `src/lib/db/index.ts` (the single swap
-point) — nothing else in the app knows or cares which one is in use.
+`MONGODB_URI` **must** be set (locally in `.env.local`, or as a real environment variable
+on your host) — every request that touches the database throws a clear error otherwise
+rather than silently falling back to something else.
 
 ```bash
 npm install
-npm run dev   # http://localhost:3000
+npm run dev   # http://localhost:3000 — requires MONGODB_URI to already be set
 ```
 
 `.env.local` (already created for local dev, git-ignored) holds:
 - `JWT_SECRET` — signs session cookies.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH` — researcher login at `/admin`. Local default:
-  `admin@cognitiverhythm.local` / `changeme123`. Generate a new hash with
-  `node -e "console.log(require('bcryptjs').hashSync('your-password', 10))"` — and escape
-  every `$` in the hash as `\$` in `.env.local`, since Next.js's env loader treats
-  unescaped `$name` as variable interpolation and will silently corrupt bcrypt hashes.
-- `MONGODB_URI` — optional; a full connection string (user/password included, exactly as
-  copied from your cluster's "Connect" dialog). Omit it to use the local JSON fallback.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH` — researcher login (works at both `/admin` and the
+  main `/login` form). Local default: `admin@cognitiverhythm.local` / `changeme123`.
+  Generate a new hash with `node -e "console.log(require('bcryptjs').hashSync('your-password', 10))"`
+  — and escape every `$` in the hash as `\$` in `.env.local`, since Next.js's env loader
+  treats unescaped `$name` as variable interpolation and will silently corrupt bcrypt hashes.
+- `MONGODB_URI` — **required**; a full connection string (user/password included, exactly
+  as copied from your cluster's "Connect" dialog).
 - `MONGODB_DB_NAME` — optional, defaults to `cognitiverhythm`. Lets this app keep its own
   database inside a cluster that's shared with other projects.
+
+**Deploying to Vercel:** set `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`,
+`MONGODB_URI`, and `MONGODB_DB_NAME` under Project Settings → Environment Variables — never
+commit them. Nothing in this app depends on a local filesystem or on `localhost`, so a
+normal `vercel` deploy (or connecting the GitHub repo in the dashboard) is all that's
+needed; `vercel dev` is optional and only for local testing.
 
 Participant flow: `/register` or `/login` → `/consent` → auto-forwards into
 `/survey/demographics` (one field per screen, opens with a welcome + privacy-assurance
@@ -41,11 +49,8 @@ before continuing into the performance sections. Finishing everything lands on `
 (the personalized Cognitive Rhythm & Resilience Report: peer benchmark, operating profile,
 action plan), unlocked at 100%. `/dashboard` still exists as an optional progress overview
 (reachable via "Save & exit"), but is no longer the default landing page. Admin flow:
-`/admin` → `/admin/dashboard` (stats + CSV export).
-
-Known limitation: the JSON-file fallback serializes writes in-process, which is fine for a
-single `next dev`/`next start` instance but won't survive multiple server instances or
-processes — set `MONGODB_URI` to avoid this entirely.
+`/admin` → `/admin/dashboard` (stats + CSV export). The admin console is also reachable by
+signing in with admin credentials at the main `/login` form.
 
 # Product Requirements Document (PRD): Cognitive Rhythm & Resilience
 
@@ -82,7 +87,7 @@ The incentive for completing it honestly and fully is the personalized report it
 
 ## 5. Non-Functional & Technical Requirements
 * **Mobile-First Responsiveness:** The UI must adapt flawlessly to mobile screens, catering to users going through their profile on their phones during breaks.
-* **Data Persistence:** Participant accounts and responses must be stored in MongoDB, with connection credentials read from environment variables (`.env.local`) — never hardcoded in source. Storage must sit behind a storage-agnostic interface (`DataStore`) so the backing store can be swapped without touching business logic; a local JSON-file implementation of that same interface is an acceptable zero-config fallback for development only, not for real data collection.
+* **Data Persistence:** Participant accounts and responses must be stored in MongoDB — the sole storage backend, with no local filesystem fallback — with connection credentials read from environment variables (`.env.local` locally, real environment variables on the host in production) — never hardcoded in source. Storage sits behind a storage-agnostic interface (`DataStore`) so the backing store could be swapped without touching business logic, but the app requires `MONGODB_URI` to be set and fails fast with a clear error if it isn't; this also makes the app deployable on serverless hosts (e.g. Vercel), which don't provide a writable, persistent filesystem.
 * **Data Security & Privacy:** Passwords must be securely hashed (bcrypt). The backend must enforce role-based access control so participants can only access their own data.
 * **Data Integrity in the Report:** The peer-benchmark comparison shown in the report must be computed from real, accumulated participant data — never a fabricated or placeholder number — and must degrade gracefully (e.g. "you're among the first to complete this") when no peer data exists yet.
 * **Performance:** The application must be lightweight and load quickly on standard cellular networks to avoid drop-off.
