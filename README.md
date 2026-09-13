@@ -48,12 +48,13 @@ rhythm…" moment leads into a personalized mid-flow insight (see `src/lib/surve
 before continuing into the performance sections.
 
 Framed to the participant as **unlocking their profile**, not filling out a form: the six
-Likert modules are grouped into three tiers (`src/lib/survey/tiers.ts`) — **Grit Profile**
+Likert modules are grouped into four tiers (`src/lib/survey/tiers.ts`) — **Grit Profile**
 (`/reports/grit`, unlocked after Grit), **Technology & Team Profile** (`/reports/tech-team`,
-unlocked after Task Performance + Contextual Performance + Technostress + AI Job Anxiety),
-and **Confidence Profile** (`/reports/confidence`, unlocked after Self-Efficacy) — plus the
-**Full Combined Report** (`/results`: peer benchmark, operating profile, action plan),
-unlocked at 100%. `/dashboard` ("Your Profile") is the persistent menu: a locked/unlocked
+unlocked after Task Performance + Contextual Performance), **Stress Profile**
+(`/reports/stress`, unlocked after Technostress + AI Job Anxiety — kept separate from
+Technology & Team since it's a strain reading, not a performance one), and **Confidence
+Profile** (`/reports/confidence`, unlocked after Self-Efficacy) — plus the **Full Combined
+Report** (`/results`: peer benchmark, operating profile, action plan), unlocked at 100%. `/dashboard` ("Your Profile") is the persistent menu: a locked/unlocked
 card per tier the participant can revisit any time, plus a single "Continue unlocking your
 profile" call to action that resumes the guided sequential flow. A tier report page redirects
 back to `/dashboard` if its modules aren't complete yet, so unlocks can't be skipped ahead by
@@ -84,7 +85,7 @@ The incentive for completing it honestly and fully is the personalized report it
 * **Section Intros:** Every section, including About You, opens with a short, motivating "why this matters" screen (an emoji, a one-line tagline, 1–2 sentences of relevance) before any questions appear. The About You intro explicitly reassures participants that their data is 100% private, used only in aggregate for academic research, and never sold, shared, or used for any commercial purpose.
 * **Mid-Flow Insight Hooks:** Two points in the flow pause for a brief "Analyzing…" moment before revealing a personalized, puzzling-but-informative statistic: immediately after Grit (pivoting into why the performance sections matter) and immediately after Contextual Performance (pivoting into Technostress). Each statistic is drawn from the participant's own answers plus real accumulated peer data where enough exists — never a fabricated number. The Grit hook additionally renders a full facet breakdown table (the four official Multi-Dimensional Grit Scale dimensions — Perseverance of Effort, Adaptability to Situations, Spirited Initiative, Steadfastness in Adverse Situations), each row showing the participant's own score against a fixed reference average (validated MDGS norms for this exact instrument — see `GRIT_FACET_REFERENCE` in `src/lib/survey/scoring.ts`) and, once ≥3 in-study peers have answered that facet, the live peer average too. The UI never names or cites the source of the reference figures to participants — no author, year, or paper reference appears anywhere in the app's user-facing copy. This sustains momentum past the point where interest most commonly drops off.
 * **One-Item-at-a-Time Disclosure:** Both the demographic intake and every Likert section present a single item per screen — never a list or a long form — to minimize cognitive load and avoid the feeling of "filling out a form."
-* **Unlocking Profile Menu:** `/dashboard` ("Your Profile," reachable via "Save & exit") is framed as a menu of personal reports being unlocked, not a survey progress tracker — a locked/unlocked card per tier (Grit Profile, Technology & Team Profile, Confidence Profile, Full Combined Report) with a single "Continue unlocking your profile" action, rather than a raw list of section names and item counts. Unlocked cards link straight to that tier's persistent report page; locked cards resume the guided sequential flow.
+* **Unlocking Profile Menu:** `/dashboard` ("Your Profile," reachable via "Save & exit") is framed as a menu of personal reports being unlocked, not a survey progress tracker — a locked/unlocked card per tier (Grit Profile, Technology & Team Profile, Stress Profile, Confidence Profile, Full Combined Report) with a single "Continue unlocking your profile" action, rather than a raw list of section names and item counts. Unlocked cards link straight to that tier's persistent report page; locked cards resume the guided sequential flow.
 * **Auto-Save:** Every answer — a Likert selection or a single demographic field — is committed to storage immediately, with a "Saved" toast confirmation, ensuring zero data loss if a participant closes the tab. Resuming a section lands on the first genuinely unanswered item, not the start.
 
 ## 4. Functional Requirements: Administrator Flow

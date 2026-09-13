@@ -2,30 +2,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { choosePerformanceHook } from "@/lib/survey/hooks";
-import {
-  computeBenchmarkForModules,
-  computeModuleMeanForAnswers,
-  computeModulePeerMeans,
-  percentileRank,
-} from "@/lib/survey/scoring";
+import { computeBenchmarkForModules, stressNarrative } from "@/lib/survey/scoring";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 
-const MODULE_IDS = ["task-performance", "contextual-performance"];
+const MODULE_IDS = ["technostress", "ai-anxiety"];
 
-export default async function TechTeamReportPage() {
+export default async function StressReportPage() {
   const userId = await requireParticipant();
   const responses = await db.getResponses(userId);
   if (!MODULE_IDS.every((id) => responses.completedModules.includes(id))) redirect("/dashboard");
 
   const allResponses = await db.listAllResponses();
   const peers = allResponses.filter((r) => r.userId !== userId);
-
-  const myContextualMean = computeModuleMeanForAnswers("contextual-performance", responses.answers) ?? 0;
-  const peerMeans = computeModulePeerMeans("contextual-performance", peers);
-  const percentile = percentileRank(myContextualMean, peerMeans);
-  const hook = choosePerformanceHook(responses.answers, { percentile, count: peerMeans.length });
-
+  const narrative = stressNarrative(responses.answers);
   const rows = computeBenchmarkForModules(MODULE_IDS, responses.answers, peers);
 
   return (
@@ -38,12 +27,11 @@ export default async function TechTeamReportPage() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-accent">🤝 Technology &amp; Team Profile</p>
-        <h1 className="mt-1 text-2xl font-semibold text-foreground">{hook.heading}</h1>
+        <p className="text-xs font-medium uppercase tracking-wide text-accent">⚡ Stress Profile</p>
+        <h1 className="mt-1 text-2xl font-semibold text-foreground">{narrative.heading}</h1>
       </div>
 
-      <p className="text-foreground/90">{hook.stat}</p>
-      <p className="text-muted">{hook.pivot}</p>
+      <p className="text-foreground/90">{narrative.body}</p>
 
       <div className="flex flex-col gap-3">
         {rows.map((row) => (
@@ -67,8 +55,8 @@ export default async function TechTeamReportPage() {
               {row.peerAverage !== null && (
                 <span>
                   {" "}
-                  Peer average: {row.peerAverage.toFixed(2)} / {row.max.toFixed(1)} (
-                  {row.peerCount} {row.peerCount === 1 ? "peer" : "peers"}).
+                  Peer average: {row.peerAverage.toFixed(2)} / {row.max.toFixed(1)} ({row.peerCount}{" "}
+                  {row.peerCount === 1 ? "peer" : "peers"}).
                 </span>
               )}
             </p>

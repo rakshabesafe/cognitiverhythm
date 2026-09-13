@@ -3,7 +3,7 @@
 import { LIKERT_MODULES } from "./schema";
 
 export interface ProfileTier {
-  id: "grit" | "tech-team" | "confidence";
+  id: "grit" | "tech-team" | "stress" | "confidence";
   title: string;
   emoji: string;
   teaser: string;
@@ -23,10 +23,18 @@ export const PROFILE_TIERS: ProfileTier[] = [
   {
     id: "tech-team",
     title: "Technology & Team Profile",
-    emoji: "⚡",
-    teaser: "How you execute, collaborate, and hold up under technology pressure — read alongside your grit.",
-    moduleIds: ["task-performance", "contextual-performance", "technostress", "ai-anxiety"],
+    emoji: "🤝",
+    teaser: "How you execute and collaborate — read alongside your grit.",
+    moduleIds: ["task-performance", "contextual-performance"],
     reportHref: "/reports/tech-team",
+  },
+  {
+    id: "stress",
+    title: "Stress Profile",
+    emoji: "⚡",
+    teaser: "How the pace of workplace technology and AI are really landing on you.",
+    moduleIds: ["technostress", "ai-anxiety"],
+    reportHref: "/reports/stress",
   },
   {
     id: "confidence",

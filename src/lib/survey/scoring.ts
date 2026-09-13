@@ -268,6 +268,41 @@ export function confidenceNarrative(answers: Record<string, number>): Confidence
   };
 }
 
+// --- Stress (Technostress + AI Job Anxiety) narrative ------------------------
+
+export interface StressNarrative {
+  band: Band;
+  heading: string;
+  body: string;
+}
+
+export function stressNarrative(answers: Record<string, number>): StressNarrative {
+  const technostress = pctForModule("technostress", answers);
+  const aiAnxiety = pctForModule("ai-anxiety", answers);
+  const combined = (technostress + aiAnxiety) / 2;
+  const band = bandFor(combined);
+
+  if (band === "High") {
+    return {
+      band,
+      heading: "The pace of technology is genuinely straining you right now.",
+      body: "Both your technostress and your AI-related anxiety are reading high. That's not a personal shortcoming — it's a structural signal that the rate of technological change around you currently exceeds what feels sustainable to absorb. Left unaddressed, this combination is one of the clearest precursors to burnout.",
+    };
+  }
+  if (band === "Moderate") {
+    return {
+      band,
+      heading: "You're feeling some of the pressure, not all of it.",
+      body: "Your answers show a moderate amount of strain from workplace technology and AI's pace of change — noticeable, but not yet overwhelming. This is a good point to build habits that keep it from climbing further.",
+    };
+  }
+  return {
+    band,
+    heading: "You're currently absorbing technology's pace well.",
+    body: "Your technostress and AI-anxiety readings are both low — the pace of technological change at work doesn't currently feel like a threat to you. That's a real asset worth protecting as demands shift.",
+  };
+}
+
 // --- Operating profile / archetype -----------------------------------------
 
 export interface Archetype {
