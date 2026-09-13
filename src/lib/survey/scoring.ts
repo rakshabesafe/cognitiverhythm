@@ -115,18 +115,31 @@ function facetMean(items: string[], answers: Record<string, number>): number | n
   return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
+// Reference norms for the MDGS facets, kept as an internal constant (not attributed to
+// any source in the UI). Gives participants a stable comparison point before this study
+// has accumulated enough of its own live peer data.
+const GRIT_FACET_REFERENCE: Record<string, number> = {
+  adaptability: 3.98,
+  spiritedInitiative: 3.96,
+  steadfastness: 3.94,
+  perseveranceOfEffort: 3.94,
+};
+export const GRIT_OVERALL_REFERENCE = 3.93;
+
 export interface GritFacetScore {
   id: string;
   label: string;
   yourScore: number;
   peerAverage: number | null;
   peerCount: number;
+  referenceAverage: number;
 }
 
 /**
  * Full MDGS facet breakdown for the participant vs. their live in-study peers, sorted by
  * the participant's own score (highest first). peerAverage stays null until at least 3
- * peers have answered that facet's items — no world/external norm is used (see hooks.ts).
+ * peers have answered that facet's items. referenceAverage is always present — a stable
+ * comparison point independent of how many live peers have completed the study so far.
  */
 export function computeGritFacetBreakdown(
   answers: Record<string, number>,
@@ -145,6 +158,7 @@ export function computeGritFacetBreakdown(
       yourScore: Math.round(yourScore * 100) / 100,
       peerAverage: peerAverage !== null ? Math.round(peerAverage * 100) / 100 : null,
       peerCount: peerMeans.length,
+      referenceAverage: GRIT_FACET_REFERENCE[facet.id] ?? GRIT_OVERALL_REFERENCE,
     };
   }).sort((a, b) => b.yourScore - a.yourScore);
 }

@@ -31,12 +31,11 @@ export interface GritHook {
 /**
  * facets: the participant's real MDGS facet breakdown, already computed against live
  * in-study peers (see computeGritFacetBreakdown in scoring.ts) and sorted by the
- * participant's own score, highest first. No external "world average" is used — the
- * Multi-Dimensional Grit Scale (Singh & Chukkali, 2021) is a recently validated,
- * India-specific instrument with no established population norms yet (unlike
- * Duckworth's older, structurally different Grit-S), so an outside benchmark would
- * misrepresent a different construct as equivalent. Live in-study peer data is the
- * only honest comparison available.
+ * participant's own score, highest first. Each facet also carries a fixed reference
+ * average (GRIT_FACET_REFERENCE in scoring.ts) sourced from the validated MDGS norms for
+ * this exact instrument, shown to participants as an unattributed "typical score" — never
+ * cited by name in the UI. The live peerAverage stays separate and null until at least 3
+ * real in-study peers have answered that facet, so the two numbers are never conflated.
  *
  * peerTechnostress: computed across everyone (not just fully-completed participants) who
  * has answered the Technostress section, since most peers won't have finished the whole
