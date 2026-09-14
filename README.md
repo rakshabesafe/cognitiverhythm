@@ -38,8 +38,10 @@ commit them. Nothing in this app depends on a local filesystem or on `localhost`
 normal `vercel` deploy (or connecting the GitHub repo in the dashboard) is all that's
 needed; `vercel dev` is optional and only for local testing.
 
-Participant flow: `/register` or `/login` → `/consent` → auto-forwards into
-`/survey/demographics` (one field per screen, opens with a welcome + privacy-assurance
+Participant flow: `/register` or `/login` → `/consent` → `/dashboard`, which shows every
+report as a locked/unlocked card up front (plus a dedicated banner prompting demographics
+first, if that's not done yet) before anything is filled in. From there, "Continue" moves
+into `/survey/demographics` (one field per screen, opens with a welcome + privacy-assurance
 intro) → each Likert section in a fixed order, each opening with its own short "why this
 matters" intro screen.
 
@@ -88,7 +90,7 @@ itself, not a sense of obligation.
 ## 3. Functional Requirements: Participant Flow
 * **Authentication:** Simple email and password registration/login. Email acts as the unique identifier to prevent duplicate submissions. No complex password rules or Single Sign-On (SSO) required.
 * **Session Management:** The app remembers a logged-in participant across visits, so they don't have to sign in every time on the same device. If something ever goes wrong with a saved session, it just sends them back to the login screen instead of showing an error.
-* **Guided, Sequential Flow:** After consent, participants move through one section at a time in a fixed order, never picking freely from a menu: **About You (demographics), then Grit, then Task & Contextual Performance, then Technostress & AI Job Anxiety, and finally Self-Efficacy.** That order tells a story — first their personality traits, then what those traits produce day-to-day, then the pressure they're under, and finally how their confidence is holding up under it. Finishing one section moves straight into the next.
+* **Dashboard First, Then Guided & Sequential:** Right after consent (and on every future visit while logged in), participants land on the dashboard first — seeing every report as a locked/unlocked card gives them a genuine preview of what they're working toward before they've answered anything. From there, moving through the actual questions is still one section at a time in a fixed order, never a free-choice menu: **About You (demographics), then Grit, then Task & Contextual Performance, then Technostress & AI Job Anxiety, and finally Self-Efficacy.** That order tells a story — first their personality traits, then what those traits produce day-to-day, then the pressure they're under, and finally how their confidence is holding up under it. Finishing one section moves straight into the next.
 * **Section Intros:** Every section opens with a short, friendly "why this matters" screen before any questions appear, so participants understand the point before diving in. The very first intro also reassures people that their answers are private, used only for academic research, and never sold or shared.
 * **Unlock Moments & Cliffhangers:** Finishing a section is followed by a brief "Analyzing…" moment and then a personal report about what that section found — the reward for answering honestly. Every report shows real numbers from the participant's own answers (plus a comparison to other participants once enough of them have answered, never a made-up number) and ends with a teaser about what the next section will reveal, so curiosity — not a progress bar — is what pulls people forward. The Grit report goes a step further and breaks grit down into its four dimensions, showing where the participant is strongest and how they compare to a general typical range.
 * **One-Item-at-a-Time Disclosure:** Every question, whether it's a demographic detail or a survey item, appears one at a time on its own screen — never a long list or a big form — to keep it feeling light and quick.
