@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export interface AdminUserRow {
@@ -97,6 +98,7 @@ export function UserTable({ rows }: { rows: AdminUserRow[] }) {
                 <th className="py-2 pr-2">Email</th>
                 <th className="py-2 pr-2">Registered</th>
                 <th className="py-2 pr-2">Progress</th>
+                <th className="py-2 pr-2" />
               </tr>
             </thead>
             <tbody>
@@ -116,6 +118,11 @@ export function UserTable({ rows }: { rows: AdminUserRow[] }) {
                   </td>
                   <td className="py-2 pr-2 text-muted">
                     {row.completedAt ? "Complete" : `${row.completedModules}/${row.totalModules}`}
+                  </td>
+                  <td className="py-2 pr-2 text-right">
+                    <Link href={`/admin/users/${row.id}`} className="text-accent underline underline-offset-2">
+                      View
+                    </Link>
                   </td>
                 </tr>
               ))}

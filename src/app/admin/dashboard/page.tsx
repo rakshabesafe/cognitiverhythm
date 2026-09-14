@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/session";
 import { LIKERT_MODULES } from "@/lib/survey/schema";
@@ -70,6 +71,13 @@ export default async function AdminDashboardPage() {
       </div>
 
       <UserTable rows={userRows} />
+
+      <Link
+        href="/admin/questions"
+        className="min-h-14 rounded-xl border border-border bg-surface px-4 py-3 text-center font-medium text-foreground"
+      >
+        View question breakdown
+      </Link>
 
       <a
         href="/api/admin/export"

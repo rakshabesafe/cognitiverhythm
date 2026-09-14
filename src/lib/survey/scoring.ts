@@ -1,4 +1,4 @@
-import { GRIT_FACETS, isDemographicsComplete, LIKERT_MODULES, SCALES, type LikertModule } from "./schema";
+import { GRIT_FACETS, isDemographicsComplete, LIKERT_MODULES, SCALES, type LikertModule, type ScaleId } from "./schema";
 
 export type Band = "Low" | "Moderate" | "High";
 export type Direction = "positive" | "negative";
@@ -108,6 +108,45 @@ export function percentileRank(mine: number, peerMeans: number[]): number | null
 export function computeModuleMeanForAnswers(moduleId: string, answers: Record<string, number>): number | null {
   const mod = LIKERT_MODULES.find((m) => m.id === moduleId);
   return mod ? moduleMean(mod, answers) : null;
+}
+
+export interface QuestionStat {
+  code: string;
+  text: string;
+  section?: string;
+  moduleId: string;
+  moduleTitle: string;
+  scaleId: ScaleId;
+  labels: string[];
+  average: number | null;
+  count: number;
+  /** Count of respondents choosing each label, same order/length as `labels` (index 0 = value 1). */
+  distribution: number[];
+}
+
+/** Every item across every module, with its average, response count, and full answer distribution — for the admin's per-question view. */
+export function computeQuestionStats(allAnswers: Record<string, number>[]): QuestionStat[] {
+  return LIKERT_MODULES.flatMap((mod) => {
+    const scale = SCALES[mod.scale];
+    return mod.items.map((item) => {
+      const values = allAnswers.map((a) => a[item.code]).filter((v): v is number => typeof v === "number");
+      const distribution = scale.labels.map((_, idx) => values.filter((v) => v === idx + 1).length);
+      const average =
+        values.length > 0 ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100 : null;
+      return {
+        code: item.code,
+        text: item.text,
+        section: item.section,
+        moduleId: mod.id,
+        moduleTitle: mod.title,
+        scaleId: mod.scale,
+        labels: scale.labels,
+        average,
+        count: values.length,
+        distribution,
+      };
+    });
+  });
 }
 
 export interface BandwidthSplit {
