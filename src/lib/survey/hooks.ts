@@ -682,21 +682,27 @@ function pressureCookerContext(orgType: string | undefined): string {
   if (orgType === "Product") {
     return "In product companies, the pressure usually isn't client SLAs — it's release velocity. Your high techno-overload reads as a structural feature of how fast your organization ships, not a personal time-management failure.";
   }
-  return "Operating in the global delivery model common to service-based IT companies inherently normalizes boundary-blurring and tight client SLAs. Your high techno-overload is a structural feature of your organization's business model, not a personal time-management failure.";
+  if (orgType === "Service Industry") {
+    return "Operating in the global delivery model common to service-based IT companies inherently normalizes boundary-blurring and tight client SLAs. Your high techno-overload is a structural feature of your organization's business model, not a personal time-management failure.";
+  }
+  return "Whatever your organization's structure, your high techno-overload reads as a feature of how work is currently organized around you — not a personal time-management failure.";
 }
 
 function existentialWaitContext(orgType: string | undefined): string {
   if (orgType === "Product") {
     return "In product firms, the pressure isn't usually client hours — it's innovation velocity. Your anxiety likely stems from watching AI get integrated into your core product architecture, forcing a perpetual state of transition even while your day-to-day workload stays manageable.";
   }
-  return "In service-delivery organizations, AI anxiety often centers less on today's ticket queue and more on how AI could reshape the billable-hours model itself — which explains why your day-to-day friction reads low while this concern persists.";
+  if (orgType === "Service Industry") {
+    return "In service-delivery organizations, AI anxiety often centers less on today's ticket queue and more on how AI could reshape the billable-hours model itself — which explains why your day-to-day friction reads low while this concern persists.";
+  }
+  return "Your anxiety here isn't about today's workload — it's about a longer-term shift in how your kind of work gets done, which explains why your day-to-day friction reads low while this concern persists.";
 }
 
 function obsolescenceSpiralContext(ageGroup: string | undefined): string {
   if (ageGroup === "18 to 28") {
     return "As a younger engineer, you're facing a unique paradox: AI is automating the exact routine coding and testing tasks entry-level engineers typically use to build foundational mastery. Your anxiety is valid — the stepping stones of your career path are shifting under you.";
   }
-  if (ageGroup === "35 and above") {
+  if (ageGroup === "36 and above") {
     return "With your seniority, this concern is less about core coding ability and more about staying strategically relevant as the tools around you change faster than most organizations can absorb.";
   }
   return "At this stage of your career, you've built real technical grounding — so this isn't about foundational skills. It more likely reflects watching the tools and workflows you've mastered get rapidly reshaped by AI, with the shape of your next few years genuinely unclear.";

@@ -106,14 +106,14 @@ export const DEMOGRAPHICS: DemographicsModule = {
       label: "Gender",
       type: "select",
       required: true,
-      options: ["Male", "Female", "Other"],
+      options: ["Woman", "Man", "Non-binary", "Prefer not to say"],
     },
     {
       code: "ageGroup",
       label: "Age Group",
       type: "select",
       required: true,
-      options: ["18 to 28", "28 to 35", "35 and above"],
+      options: ["18 to 28", "29 to 35", "36 and above"],
     },
     {
       code: "qualification",
@@ -133,7 +133,7 @@ export const DEMOGRAPHICS: DemographicsModule = {
       label: "Marital Status",
       type: "select",
       required: true,
-      options: ["Married", "Unmarried"],
+      options: ["Single", "Married", "Separated", "Widowed", "Other"],
     },
     {
       code: "role",
@@ -154,7 +154,7 @@ export const DEMOGRAPHICS: DemographicsModule = {
       label: "Organization Type",
       type: "select",
       required: true,
-      options: ["Product", "Service Industry"],
+      options: ["Product", "Service Industry", "Other"],
     },
     {
       code: "orgTenure",
