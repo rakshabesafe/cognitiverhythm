@@ -12,9 +12,9 @@ interface DemographicsRunnerProps {
   intro: SectionIntroData;
 }
 
-interface SaveResult {
-  nextRoute?: string;
-}
+// Only presence/absence matters here — a failed save resolves to null, a successful one to
+// the parsed response body (whose fields aren't otherwise read by this component).
+type SaveResult = Record<string, unknown>;
 
 export function DemographicsRunner({ fields, initialValues, intro }: DemographicsRunnerProps) {
   const router = useRouter();
@@ -69,7 +69,10 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
       const data = await persist({ [code]: rawValue });
       if (!data) return;
       if (index === total - 1) {
-        router.push(data.nextRoute ?? "/dashboard");
+        // Land back on the dashboard rather than auto-continuing into Grit, so the
+        // participant explicitly chooses to start the next section instead of being
+        // swept straight into it.
+        router.push("/dashboard");
         router.refresh();
       } else {
         setIndex((i) => Math.min(i + 1, total - 1));
