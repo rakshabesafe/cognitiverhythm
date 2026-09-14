@@ -24,7 +24,7 @@ export function ConsentForm() {
         setError("Something went wrong. Please try again.");
         return;
       }
-      router.push(data?.nextRoute ?? "/survey/demographics");
+      router.push(data?.nextRoute ?? "/dashboard");
       router.refresh();
     } finally {
       setSubmitting(false);

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import {
   countAnsweredRequiredDemographics,
+  isDemographicsComplete,
   TOTAL_LIKERT_ITEMS,
   TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS,
 } from "@/lib/survey/schema";
@@ -20,6 +21,7 @@ export default async function DashboardPage() {
 
   const responses = await db.getResponses(userId);
   const demographicsAnswered = countAnsweredRequiredDemographics(responses.demographics);
+  const demographicsDone = isDemographicsComplete(responses.demographics);
   const answeredItems = Object.keys(responses.answers).length;
   const totalItems = TOTAL_LIKERT_ITEMS + TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS;
   const overallPercent = ((answeredItems + demographicsAnswered) / totalItems) * 100;
@@ -35,6 +37,25 @@ export default async function DashboardPage() {
         <LogoutButton />
       </div>
 
+      {!demographicsDone && (
+        <Link
+          href={nextRoute}
+          className="flex items-center gap-4 rounded-2xl border border-accent/40 bg-accent/10 p-4 transition-colors hover:bg-accent/15"
+        >
+          <span className="text-2xl" aria-hidden>
+            👋
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-foreground">Let&rsquo;s start with a few quick details about you</p>
+            <p className="text-sm text-muted">
+              {demographicsAnswered}/{TOTAL_REQUIRED_DEMOGRAPHIC_FIELDS} answered — every report below unlocks
+              once this is done.
+            </p>
+          </div>
+          <span className="shrink-0 text-sm text-accent">Start →</span>
+        </Link>
+      )}
+
       <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4">
         <ProgressRing percent={overallPercent} size={64} />
         <div className="min-w-0 flex-1">
@@ -49,7 +70,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {!responses.completedAt && (
+      {!responses.completedAt && demographicsDone && (
         <Link
           href={nextRoute}
           className="min-h-14 rounded-xl bg-accent px-4 py-3 text-center font-medium text-background"

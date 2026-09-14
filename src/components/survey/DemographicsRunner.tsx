@@ -4,17 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import type { DemographicField, SectionIntro as SectionIntroData } from "@/lib/survey/schema";
-import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { SectionIntro } from "./SectionIntro";
-
-const REPORTS_PREVIEW = [
-  ...PROFILE_TIERS.map((tier) => ({ emoji: tier.emoji, title: tier.title, teaser: tier.teaser })),
-  {
-    emoji: "📊",
-    title: "Full Combined Report",
-    teaser: "Your peer benchmark, operating profile, and strategic action plan — all in one place.",
-  },
-];
 
 interface DemographicsRunnerProps {
   fields: DemographicField[];
@@ -114,24 +104,7 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
         itemCount={total}
         buttonLabel="Let's begin"
         onBegin={() => setStarted(true)}
-      >
-        <div className="flex w-full flex-col gap-2 text-left">
-          <p className="text-center text-xs font-medium uppercase tracking-wide text-muted">
-            Here&rsquo;s what you&rsquo;ll unlock along the way
-          </p>
-          {REPORTS_PREVIEW.map((report) => (
-            <div key={report.title} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3">
-              <span className="text-xl" aria-hidden>
-                {report.emoji}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">{report.title}</p>
-                <p className="text-xs text-muted">{report.teaser}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SectionIntro>
+      />
     );
   }
 

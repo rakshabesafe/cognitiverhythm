@@ -2,15 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getParticipantSession } from "@/lib/auth/session";
-import { getNextRoute } from "@/lib/survey/scoring";
 
 export default async function HomePage() {
   const userId = await getParticipantSession();
   if (userId) {
     const user = await db.getUserById(userId);
-    if (!user?.consentAt) redirect("/consent");
-    const responses = await db.getResponses(userId);
-    redirect(getNextRoute(responses));
+    redirect(user?.consentAt ? "/dashboard" : "/consent");
   }
 
   return (
