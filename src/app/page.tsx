@@ -30,7 +30,7 @@ export default async function HomePage() {
         <p className="mt-3 text-muted">
           Discover how you actually handle technology, pressure, and change at work — benchmarked
           against your peers in Indian IT, with a personalized action plan at the end. Takes about
-          15–20 minutes, and you can pick it up again anytime.
+          10 to 15 mins, and you can pick it up again anytime.
         </p>
       </div>
 
@@ -61,7 +61,7 @@ export default async function HomePage() {
         </Link>
       </div>
       <p className="relative text-center text-xs text-muted">
-        Part of an ongoing academic research study. Your answers are confidential and only used
+        Part of an ongoing academic research study. <strong className="text-foreground">Your answers are private and confidential</strong> and only used
         in aggregate.
       </p>
     </main>
