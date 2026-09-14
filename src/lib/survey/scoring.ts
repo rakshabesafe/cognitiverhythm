@@ -110,30 +110,105 @@ export function computeModuleMeanForAnswers(moduleId: string, answers: Record<st
   return mod ? moduleMean(mod, answers) : null;
 }
 
+export interface BandwidthSplit {
+  executionPct: number;
+  collaborationPct: number;
+}
+
+/** Task vs. Contextual Performance as a comparative split — the "thread allocation" framing. */
+export function computeBandwidthSplit(taskScore: number, contextualScore: number): BandwidthSplit {
+  const total = taskScore + contextualScore;
+  if (total <= 0) return { executionPct: 50, collaborationPct: 50 };
+  const executionPct = Math.round((taskScore / total) * 100);
+  return { executionPct, collaborationPct: 100 - executionPct };
+}
+
+export type CollaborationBalanceBand = "altruism-tax" | "leaning-collaborative" | "balanced" | "leaning-execution" | "siloed-focus";
+
+export interface CollaborationBalanceReading {
+  ratio: number;
+  band: CollaborationBalanceBand;
+}
+
+// Thresholds per the "Organizational Citizenship Ratio" (Contextual / Task) — grounded in
+// Motowidlo & Schmit (1999) and Sonnentag & Frese (2002), which treat contextual behaviors
+// as the lubricant for the technical core rather than an unrelated second axis. Balanced
+// engineers sit at 0.95-1.05 (this study's own peer mean: Task ≈ 4.00, Contextual ≈ 4.09,
+// ratio ≈ 1.02). >1.15 is the "Altruism Tax" band, <0.85 the "Siloed Focus" band; the two
+// gaps in between (0.85-0.95, 1.05-1.15) aren't named in the source research, so they get a
+// softer "leaning" label rather than being forced into one of the two named extremes.
+export function computeCollaborationBalance(taskScore: number, contextualScore: number): CollaborationBalanceReading {
+  if (taskScore <= 0) return { ratio: 0, band: "balanced" };
+  const ratio = Math.round((contextualScore / taskScore) * 100) / 100;
+  let band: CollaborationBalanceBand;
+  if (ratio > 1.15) band = "altruism-tax";
+  else if (ratio > 1.05) band = "leaning-collaborative";
+  else if (ratio >= 0.95) band = "balanced";
+  else if (ratio >= 0.85) band = "leaning-execution";
+  else band = "siloed-focus";
+  return { ratio, band };
+}
+
+export interface CognitiveCurrencyReading {
+  /** TP4 alone — "I keep my knowledge about my job up-to-date." */
+  currency: number;
+  /** Mean of TP1/TP2/TP3/TP5 — on-time delivery, accuracy, independent troubleshooting. */
+  executionProficiency: number;
+}
+
+/**
+ * Splits Task Performance's own items into Execution Proficiency and Cognitive Currency —
+ * a distinction a single whole-module average quietly hides. Someone can hit every delivery
+ * milestone on time while letting continuous learning stall under load, or the reverse.
+ */
+export function computeCognitiveCurrency(answers: Record<string, number>): CognitiveCurrencyReading {
+  const currency = answers["TP4"] ?? 0;
+  const executionItems = ["TP1", "TP2", "TP3", "TP5"];
+  const values = executionItems.map((c) => answers[c]).filter((v): v is number => typeof v === "number");
+  const executionProficiency = values.length > 0 ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100 : 0;
+  return { currency, executionProficiency };
+}
+
 function facetMean(items: string[], answers: Record<string, number>): number | null {
   const values = items.map((code) => answers[code]).filter((v): v is number => typeof v === "number");
   return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
+/** Inclusive [low, high] typical-score band. */
+export type ScoreRange = [number, number];
+
 // Reference norms for the MDGS facets, kept as an internal constant (not attributed to
 // any source in the UI). Gives participants a stable comparison point before this study
 // has accumulated enough of its own live peer data.
-const GRIT_FACET_REFERENCE: Record<string, number> = {
-  adaptability: 3.98,
-  spiritedInitiative: 3.96,
-  steadfastness: 3.94,
-  perseveranceOfEffort: 3.94,
+const GRIT_FACET_REFERENCE_RANGE: Record<string, ScoreRange> = {
+  adaptability: [3.53, 3.96],
+  perseveranceOfEffort: [3.53, 3.88],
+  spiritedInitiative: [3.54, 3.8],
+  steadfastness: [3.6, 3.85],
 };
-export const GRIT_OVERALL_REFERENCE = 3.93;
+export const GRIT_OVERALL_REFERENCE_RANGE: ScoreRange = [3.72, 4.11];
+
+// Item-mean reference point within each facet's range — a single figure alongside the
+// range so participants can see both where the typical band sits and exactly where the
+// average respondent lands inside it.
+const GRIT_FACET_REFERENCE_MEAN: Record<string, number> = {
+  adaptability: 3.81,
+  perseveranceOfEffort: 3.74,
+  spiritedInitiative: 3.69,
+  steadfastness: 3.75,
+};
+export const GRIT_OVERALL_REFERENCE_MEAN =
+  Object.values(GRIT_FACET_REFERENCE_MEAN).reduce((a, b) => a + b, 0) / Object.values(GRIT_FACET_REFERENCE_MEAN).length;
 
 /**
- * A 5-step read of a score against a comparison point (a reference/typical score, or a
+ * A 5-step read of a score against a comparison point (a reference/typical range, or a
  * live peer average) — used to pick which of several hand-written, always-positive
  * interpretations to show for a given dimension. Never maps to language implying a score
  * is bad; only to how much headroom is being highlighted.
  */
 export type ScoreTier = "well-below" | "below" | "typical" | "above" | "well-above";
 
+/** Grades a score against a fixed comparison point (used outside Grit, which has real ranges). */
 export function tierFor(yourScore: number, comparisonPoint: number): ScoreTier {
   const diff = yourScore - comparisonPoint;
   if (diff <= -0.75) return "well-below";
@@ -143,42 +218,59 @@ export function tierFor(yourScore: number, comparisonPoint: number): ScoreTier {
   return "well-above";
 }
 
+/**
+ * Grades a score against a typical *range* rather than a single point: anywhere inside
+ * [low, high] is "typical" outright, and only distance past whichever bound it's beyond
+ * decides "below"/"well-below" or "above"/"well-above".
+ */
+export function tierForRange(yourScore: number, [low, high]: ScoreRange): ScoreTier {
+  if (yourScore < low) return low - yourScore >= 0.5 ? "well-below" : "below";
+  if (yourScore > high) return yourScore - high >= 0.5 ? "well-above" : "above";
+  return "typical";
+}
+
 export interface GritFacetScore {
   id: string;
   label: string;
   yourScore: number;
-  peerAverage: number | null;
-  peerCount: number;
-  referenceAverage: number;
+  referenceRange: ScoreRange;
+  referenceMean: number;
 }
 
 /**
- * Full MDGS facet breakdown for the participant vs. their live in-study peers, sorted by
- * the participant's own score (highest first). peerAverage stays null until at least 3
- * peers have answered that facet's items. referenceAverage is always present — a stable
- * comparison point independent of how many live peers have completed the study so far.
+ * Full MDGS facet breakdown for the participant, sorted by the participant's own score
+ * (highest first). referenceRange/referenceMean are a stable typical-score band and item
+ * mean sourced from the validated MDGS norms for this instrument — no peer/cohort data
+ * involved.
  */
-export function computeGritFacetBreakdown(
-  answers: Record<string, number>,
-  peerResponses: { answers: Record<string, number> }[]
-): GritFacetScore[] {
+export function computeGritFacetBreakdown(answers: Record<string, number>): GritFacetScore[] {
   return GRIT_FACETS.map((facet) => {
     const yourScore = facetMean(facet.items, answers) ?? 0;
-    const peerMeans = peerResponses
-      .map((r) => facetMean(facet.items, r.answers))
-      .filter((m): m is number => m !== null);
-    const peerAverage =
-      peerMeans.length >= 3 ? peerMeans.reduce((a, b) => a + b, 0) / peerMeans.length : null;
     return {
       id: facet.id,
       label: facet.label,
       yourScore: Math.round(yourScore * 100) / 100,
-      peerAverage: peerAverage !== null ? Math.round(peerAverage * 100) / 100 : null,
-      peerCount: peerMeans.length,
-      referenceAverage: GRIT_FACET_REFERENCE[facet.id] ?? GRIT_OVERALL_REFERENCE,
+      referenceRange: GRIT_FACET_REFERENCE_RANGE[facet.id] ?? GRIT_OVERALL_REFERENCE_RANGE,
+      referenceMean: GRIT_FACET_REFERENCE_MEAN[facet.id] ?? GRIT_OVERALL_REFERENCE_MEAN,
     };
   }).sort((a, b) => b.yourScore - a.yourScore);
 }
+
+/** A typical-score reference point for a section: a mean, a range, or both — whichever is configured. */
+export interface SectionReference {
+  mean?: number;
+  range?: ScoreRange;
+}
+
+// Reference norms for the Technostress sub-dimensions, kept as internal constants (not
+// attributed to any source in the UI) — same treatment as the Grit facet reference figures.
+// Configurable: edit these entries to update the "Typical" figures shown in the Stress
+// report. Only mean, only range, or both is fine — the UI renders whatever's present.
+const SECTION_REFERENCE: Record<string, SectionReference> = {
+  Overload: { mean: 3.0 },
+  Complexity: { range: [2.5, 3.0] },
+  Uncertainty: { range: [2.71, 3.06] },
+};
 
 export interface SectionScore {
   id: string;
@@ -187,13 +279,16 @@ export interface SectionScore {
   peerAverage: number | null;
   peerCount: number;
   max: number;
+  reference?: SectionReference;
 }
 
 /**
  * Breaks a module down by its items' `section` groupings (e.g. Technostress splits into
  * Overload / Complexity / Uncertainty), scored against live in-study peers and sorted by
  * the participant's own score, highest first. Same ≥3-peer rule as everywhere else: no
- * peer figure is shown until enough real peers have answered that group.
+ * peer figure is shown until enough real peers have answered that group. `reference` is a
+ * fixed typical-score figure (see SECTION_REFERENCE above) — present only for sections that
+ * have one configured, currently just Technostress's three.
  */
 export function computeSectionBreakdown(
   moduleId: string,
@@ -225,9 +320,26 @@ export function computeSectionBreakdown(
         peerAverage: peerAverage !== null ? Math.round(peerAverage * 100) / 100 : null,
         peerCount: peerMeans.length,
         max,
+        reference: SECTION_REFERENCE[section],
       };
     })
     .sort((a, b) => b.yourScore - a.yourScore);
+}
+
+// Task Performance / Contextual Performance typical-range norms are published on the
+// IWPQ's native 0-4 point scale, but this app stores every "agree5" answer as 1-5
+// internally (see LikertScale.tsx: option value = index + 1) — same 5 points, just shifted
+// by one. Configured here exactly as published (0-4) so the source figures stay directly
+// editable/auditable, then shifted by +1 wherever they're read against a participant's
+// stored 1-5 score.
+const PERFORMANCE_REFERENCE_RANGE_0_4: Record<string, ScoreRange> = {
+  "task-performance": [3.1, 3.27],
+  "contextual-performance": [2.53, 3.08],
+};
+
+function internalScaleRange(moduleId: string): ScoreRange | undefined {
+  const raw = PERFORMANCE_REFERENCE_RANGE_0_4[moduleId];
+  return raw ? [raw[0] + 1, raw[1] + 1] : undefined;
 }
 
 export interface BenchmarkRow {
@@ -240,6 +352,8 @@ export interface BenchmarkRow {
   band: Band;
   emoji: "🟢" | "🟡" | "🔴";
   comparisonText: string;
+  /** Fixed typical-score range, already shifted to this app's internal scale — configured only for Task/Contextual Performance. */
+  referenceRange?: ScoreRange;
 }
 
 function buildBenchmarkRow(mod: LikertModule, myAnswers: Record<string, number>, peer: PeerStat): BenchmarkRow {
@@ -277,6 +391,7 @@ function buildBenchmarkRow(mod: LikertModule, myAnswers: Record<string, number>,
     band,
     emoji,
     comparisonText,
+    referenceRange: internalScaleRange(mod.id),
   };
 }
 
@@ -316,104 +431,4 @@ export function bandForModule(moduleId: string, answers: Record<string, number>)
  */
 export function bandForScore(score: number, max: number): Band {
   return bandFor(toPct(score, max));
-}
-
-// --- Operating profile / archetype -----------------------------------------
-
-export interface Archetype {
-  id: string;
-  name: string;
-  diagnosis: string;
-  actions: string[];
-}
-
-export function computeArchetype(answers: Record<string, number>): Archetype {
-  const technostress = pctForModule("technostress", answers);
-  const grit = pctForModule("grit", answers);
-  const selfEfficacy = pctForModule("self-efficacy", answers);
-  const aiAnxiety = pctForModule("ai-anxiety", answers);
-  const contextualPerformance = pctForModule("contextual-performance", answers);
-  const resources = (grit + selfEfficacy) / 2;
-
-  if (aiAnxiety >= HIGH && selfEfficacy < LOW) {
-    return {
-      id: "obsolescence-trap",
-      name: "The Obsolescence Trap",
-      diagnosis:
-        "The pace of technological change is currently outpacing your sense of mastery over it. That combination — real anxiety about AI plus low confidence in your ability to keep up — can create a loss spiral, where the anxiety itself makes it harder to build the skills that would resolve it.",
-      actions: [
-        "Stop trying to learn everything at once. Pick one specific, manageable AI tool — a code-completion agent, say — and get genuinely fluent in it this week.",
-        "Small, immediate mastery experiences rebuild self-efficacy faster than broad exposure. Track one concrete thing you've gotten good at each week.",
-        "Borrow confidence deliberately — find a colleague a step ahead with the same tool and ask them to show you their workflow.",
-      ],
-    };
-  }
-
-  if (technostress >= HIGH && contextualPerformance < LOW) {
-    return {
-      id: "isolated-engineer",
-      name: "The Isolated Engineer",
-      diagnosis:
-        "The structural demands of your role appear to be pushing you into resource-conservation mode — solving problems alone rather than looping others in. That's a rational short-term response to overload, but it quietly increases the complexity you're fighting, since you lose the shortcuts that come from a second perspective.",
-      actions: [
-        "Pair-program your next non-trivial ticket instead of debugging it solo.",
-        "Timebox solo debugging (45 minutes is a good default) — if it's still unresolved, pull in a second pair of eyes rather than pushing on alone.",
-        "Protect one recurring sync with a teammate or mentor that's purely for talking through blockers, not status updates.",
-      ],
-    };
-  }
-
-  if (technostress >= HIGH && resources >= HIGH) {
-    return {
-      id: "overloaded-innovator",
-      name: "The Overloaded Innovator",
-      diagnosis:
-        "Your data shows a powerful combination of high grit and self-efficacy intersecting with high technostress. Because your resilience and adaptability run high, you naturally step up to handle complex system changes and difficult debugging — but you're doing it in an environment that's forcing you to work faster than is sustainable. You're currently bridging the gap between organizational demands and technological complexity using your own psychological resilience.",
-      actions: [
-        "Practice strategic quitting: set a strict timebox for debugging (e.g. 45 minutes). If the blocker remains, force a context-switch or bring in a peer review rather than grinding on.",
-        "Protect a daily deep-work block — 90 minutes with notifications fully off — to shield your flow state from the fragmentation of constant technology change.",
-        "Aggressively automate the routine parts of your work (boilerplate, CI/CD logging) so your cognitive budget goes to architecture and logic, not repetition.",
-      ],
-    };
-  }
-
-  if (technostress >= HIGH) {
-    return {
-      id: "stretched-thin",
-      name: "Stretched Thin",
-      diagnosis:
-        "Right now, the demands on your time and adaptability outpace the internal resources you have to meet them. This is a common and very fixable pattern — but left unaddressed, it's the classic precursor to burnout, since there's no reserve of grit or confidence currently absorbing the pressure.",
-      actions: [
-        "Name the single biggest source of friction in your week and raise it explicitly with your manager — this is a structural issue worth surfacing, not a personal failing to hide.",
-        "Rebuild momentum with small, clearly completable wins before taking on ambiguous stretch work.",
-        "Protect recovery time as seriously as you protect deadlines — under-resourced effort depletes fast without it.",
-      ],
-    };
-  }
-
-  if (resources >= HIGH) {
-    return {
-      id: "coasting-architect",
-      name: "The Coasting Architect",
-      diagnosis:
-        "You have high resilience and you're currently operating in a comparatively sustainable environment. This is a rare, valuable window rather than something to worry about — the question now is what you deliberately do with the slack.",
-      actions: [
-        "Use this low-friction period to master a complex new AI workflow before the next wave of technological disruption hits.",
-        "Mentor a junior engineer — your contextual performance compounds when you invest it in others while you have the bandwidth.",
-        "Bank the win: document what's working in your current setup so you can recreate it the next time demands rise.",
-      ],
-    };
-  }
-
-  return {
-    id: "steady-pacer",
-    name: "The Steady Pacer",
-    diagnosis:
-      "Your current environment and your response to it are broadly in balance — you're neither overwhelmed nor coasting. That equilibrium is worth noticing, since it's usually easier to build from than to recover from a deficit.",
-    actions: [
-      "Use the stability to build one new skill on your own schedule, rather than only in reaction to pressure.",
-      "Check back in periodically — balance can shift quietly as demands or team context change.",
-      "Consider what meaningfully higher performance would look like for you with 10% more bandwidth, and take one step toward it.",
-    ],
-  };
 }

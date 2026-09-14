@@ -40,6 +40,34 @@ export default async function TechTeamReportPage() {
       <EnergyAllocationTable rows={rows} insights={hook.rowInsights} />
 
       <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Bandwidth allocation</p>
+        <div className="mb-2 flex h-2.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="h-full bg-accent" style={{ width: `${hook.bandwidthSplit.executionPct}%` }} />
+          <div className="h-full bg-accent/35" style={{ width: `${hook.bandwidthSplit.collaborationPct}%` }} />
+        </div>
+        <p className="text-sm text-foreground/90">
+          <span className="font-medium text-foreground">{hook.bandwidthSplit.executionPct}% Execution</span> /{" "}
+          <span className="font-medium text-foreground">{hook.bandwidthSplit.collaborationPct}% Collaboration</span>
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Diagnostic ratios</p>
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Collaboration Balance Ratio: {hook.collaborationBalance.ratio.toFixed(2)} ({hook.collaborationBalance.label})
+            </p>
+            <p className="mt-0.5 text-sm text-foreground/90">{hook.collaborationBalance.text}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">Cognitive Currency: {hook.cognitiveCurrency.currency.toFixed(1)} / 5.0</p>
+            <p className="mt-0.5 text-sm text-foreground/90">{hook.cognitiveCurrency.text}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface p-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.contextLabel}</p>
         <p className="text-sm text-foreground/90">{hook.contextText}</p>
       </div>
@@ -51,6 +79,18 @@ export default async function TechTeamReportPage() {
             {paragraph}
           </p>
         ))}
+      </div>
+
+      {hook.careerStageDiagnostic && (
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.careerStageDiagnostic.label}</p>
+          <p className="text-sm text-foreground/90">{hook.careerStageDiagnostic.text}</p>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-accent/40 bg-accent/10 p-4">
+        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-accent">Tuning parameter</p>
+        <p className="text-sm text-foreground/90">{hook.tuningParameter}</p>
       </div>
     </ReportShell>
   );

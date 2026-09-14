@@ -27,7 +27,7 @@ export const PROFILE_TIERS: ProfileTier[] = [
   },
   {
     id: "tech-team",
-    title: "Technology & Team Profile",
+    title: "Your Operating Rhythm",
     emoji: "🤝",
     teaser: "Where your energy is currently flowing — deep technical work versus invisible team support.",
     analyzingLabel: "Mapping your energy allocation…",

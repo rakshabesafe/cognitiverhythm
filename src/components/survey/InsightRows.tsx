@@ -7,11 +7,27 @@ export interface InsightRowData {
   max: number;
   peerAverage: number | null;
   peerCount: number;
+  /** Optional fixed typical-score reference — a mean, a range, or both. */
+  referenceMean?: number;
+  referenceRange?: [number, number];
 }
 
 interface InsightRowsProps {
   rows: InsightRowData[];
   insights: RowInsight[];
+}
+
+function formatReference(row: InsightRowData): string | null {
+  if (typeof row.referenceMean === "number" && row.referenceRange) {
+    return `Typical: ${row.referenceMean.toFixed(2)} / ${row.max.toFixed(1)} (range ${row.referenceRange[0].toFixed(2)}–${row.referenceRange[1].toFixed(2)}).`;
+  }
+  if (typeof row.referenceMean === "number") {
+    return `Typical: ${row.referenceMean.toFixed(2)} / ${row.max.toFixed(1)}.`;
+  }
+  if (row.referenceRange) {
+    return `Typical range: ${row.referenceRange[0].toFixed(2)}–${row.referenceRange[1].toFixed(2)} / ${row.max.toFixed(1)}.`;
+  }
+  return null;
 }
 
 /**
@@ -25,6 +41,7 @@ export function InsightRows({ rows, insights }: InsightRowsProps) {
     <div className="flex flex-col gap-3">
       {rows.map((row) => {
         const insight = insights.find((i) => i.id === row.id);
+        const reference = formatReference(row);
         return (
           <div key={row.id} className="rounded-2xl border border-border bg-surface p-4">
             <div className="mb-1 flex items-center justify-between gap-3">
@@ -52,6 +69,7 @@ export function InsightRows({ rows, insights }: InsightRowsProps) {
                 ? `Peer baseline: ${row.peerAverage.toFixed(2)} / ${row.max.toFixed(1)} (${row.peerCount} ${row.peerCount === 1 ? "peer" : "peers"}).`
                 : "You're among the first participants in this study, so there's no peer baseline yet."}
             </p>
+            {reference && <p className="mt-0.5 text-xs text-muted">{reference}</p>}
           </div>
         );
       })}

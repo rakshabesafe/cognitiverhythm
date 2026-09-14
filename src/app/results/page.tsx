@@ -1,7 +1,23 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { computeArchetype, computeBenchmark, computePeerAverages } from "@/lib/survey/scoring";
+import {
+  chooseOverallArchetype,
+  describeConfidenceRow,
+  describeGritFacets,
+  describeStressRow,
+  efficacyAction,
+  gritFacetAction,
+  technostressAction,
+} from "@/lib/survey/hooks";
+import {
+  bandForModule,
+  bandForScore,
+  computeBenchmark,
+  computeGritFacetBreakdown,
+  computePeerAverages,
+  computeSectionBreakdown,
+} from "@/lib/survey/scoring";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 import { PrintButton } from "@/components/ui/PrintButton";
 
@@ -11,12 +27,24 @@ export default async function ResultsPage() {
   if (!responses.completedAt) redirect("/dashboard");
 
   const allResponses = await db.listAllResponses();
-  const peerAnswerSets = allResponses
-    .filter((r) => r.completedAt && r.userId !== userId)
-    .map((r) => r.answers);
+  const peers = allResponses.filter((r) => r.userId !== userId);
+  const peerAnswerSets = allResponses.filter((r) => r.completedAt && r.userId !== userId).map((r) => r.answers);
   const peerAverages = computePeerAverages(peerAnswerSets);
   const benchmark = computeBenchmark(responses.answers, peerAverages);
-  const archetype = computeArchetype(responses.answers);
+
+  const gritBand = bandForModule("grit", responses.answers);
+  const efficacyBand = bandForModule("self-efficacy", responses.answers);
+  const technostressBand = bandForModule("technostress", responses.answers);
+  const archetype = chooseOverallArchetype(gritBand, efficacyBand, technostressBand);
+
+  const facets = computeGritFacetBreakdown(responses.answers);
+  const topFacets = describeGritFacets(facets).slice(0, 2);
+  const topFacetId = facets[0].id;
+
+  const techSections = computeSectionBreakdown("technostress", responses.answers, peers);
+  const topTechSection = techSections[0];
+  const techAlert = describeStressRow(topTechSection.id, bandForScore(topTechSection.yourScore, topTechSection.max));
+  const efficacyAlert = describeConfidenceRow(efficacyBand);
 
   const name = responses.demographics.name?.trim();
   const role = responses.demographics.role;
@@ -78,32 +106,70 @@ export default async function ResultsPage() {
                   </span>
                 )}
               </p>
+              {row.referenceRange && (
+                <p className="mt-0.5 text-sm text-muted">
+                  Typical range: {row.referenceRange[0].toFixed(2)}–{row.referenceRange[1].toFixed(2)} / {row.max.toFixed(1)}.
+                </p>
+              )}
             </div>
           ))}
         </div>
       </section>
 
-      {/* Section 2: Diagnosis */}
+      {/* Section 2: Executive summary + drivers + alerts */}
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-foreground">2. Your Operating Profile</h2>
+
         <div className="rounded-2xl border border-accent/40 bg-accent/10 p-5">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-accent">Executive summary</p>
           <h3 className="mb-2 text-xl font-semibold text-foreground">{archetype.name}</h3>
-          <p className="text-sm leading-relaxed text-foreground/90">{archetype.diagnosis}</p>
+          <p className="text-sm leading-relaxed text-foreground/90">{archetype.summary}</p>
+          <p className="mt-2 text-sm leading-relaxed text-foreground/90">{archetype.impact}</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Key drivers — your strongest pillars</p>
+          <div className="flex flex-col gap-3">
+            {topFacets.map((f) => (
+              <div key={f.id}>
+                <p className="text-sm font-medium text-foreground">{f.label}</p>
+                <p className="text-sm text-foreground/90">{f.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">What&apos;s shaping your day-to-day</p>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-foreground/90">
+              <span className="mr-1">{techAlert.emoji}</span>
+              <span className="font-medium text-foreground">Techno-{topTechSection.id}: </span>
+              {techAlert.text}
+            </p>
+            <p className="text-sm text-foreground/90">
+              <span className="mr-1">{efficacyAlert.emoji}</span>
+              <span className="font-medium text-foreground">Self-efficacy: </span>
+              {efficacyAlert.text}
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Section 3: Action plan */}
+      {/* Section 3: Tailored micro-actions */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-foreground">3. Strategic Action Plan</h2>
+        <h2 className="text-lg font-semibold text-foreground">3. Tailored Micro-Actions</h2>
         <div className="flex flex-col gap-3">
-          {archetype.actions.map((action, idx) => (
-            <div key={idx} className="flex gap-3 rounded-2xl border border-border bg-surface p-4">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-background">
-                {idx + 1}
-              </span>
-              <p className="text-sm text-foreground/90">{action}</p>
-            </div>
-          ))}
+          {[technostressAction(topTechSection.id), efficacyAction(efficacyBand), gritFacetAction(topFacetId), archetype.recommendation].map(
+            (action, idx) => (
+              <div key={idx} className="flex gap-3 rounded-2xl border border-border bg-surface p-4">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-background">
+                  {idx + 1}
+                </span>
+                <p className="text-sm text-foreground/90">{action}</p>
+              </div>
+            )
+          )}
         </div>
       </section>
 

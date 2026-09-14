@@ -23,7 +23,16 @@ export default async function StressReportPage() {
   const hook = chooseStressHook(responses.answers, responses.demographics, gritBand);
 
   const rows: InsightRowData[] = [
-    ...sections.map((s) => ({ id: s.id, title: s.label, yourScore: s.yourScore, max: s.max, peerAverage: s.peerAverage, peerCount: s.peerCount })),
+    ...sections.map((s) => ({
+      id: s.id,
+      title: s.label,
+      yourScore: s.yourScore,
+      max: s.max,
+      peerAverage: s.peerAverage,
+      peerCount: s.peerCount,
+      referenceMean: s.reference?.mean,
+      referenceRange: s.reference?.range,
+    })),
     { id: "ai-anxiety", title: "AI Job Anxiety", yourScore: aiAnxietyRow.yourScore, max: aiAnxietyRow.max, peerAverage: aiAnxietyRow.peerAverage, peerCount: aiAnxietyRow.peerCount },
   ];
   const insights: RowInsight[] = rows.map((row) => describeStressRow(row.id, bandForScore(row.yourScore, row.max)));

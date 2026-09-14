@@ -3,9 +3,16 @@
 // → output (Technology & Team) → environment (Stress) → mindset (Confidence).
 import {
   bandForModule,
+  bandForScore,
+  computeBandwidthSplit,
+  computeCognitiveCurrency,
+  computeCollaborationBalance,
   HIGH,
-  tierFor,
+  tierForRange,
   type Band,
+  type BandwidthSplit,
+  type CognitiveCurrencyReading,
+  type CollaborationBalanceReading,
   type GritFacetScore,
   type ScoreTier,
 } from "./scoring";
@@ -110,48 +117,41 @@ export interface GritFacetDescription {
 export function describeGritFacets(facets: GritFacetScore[]): GritFacetDescription[] {
   return facets.map((f) => {
     const copy = GRIT_FACET_COPY[f.id];
-    const tier = tierFor(f.yourScore, f.referenceAverage);
+    const tier = tierForRange(f.yourScore, f.referenceRange);
     return { id: f.id, label: f.label, meaning: copy.meaning, tier, description: copy.tiers[tier] };
   });
 }
 
-const OVERALL_GRIT_SUMMARY: Record<ScoreTier, string> = {
-  "well-above": "Across all four dimensions, your overall grit score is exceptionally high — a genuine strength to lean on.",
-  above: "Across all four dimensions, your overall grit score comes in above the typical range — a real strength to build from.",
-  typical: "Across all four dimensions, your overall grit score lands right around the typical range for this field — a solid, dependable foundation.",
-  below:
-    "Across all four dimensions, your overall grit score is a touch below the typical range — which mostly means there's meaningful, fast-to-unlock room to grow, especially in the areas below.",
-  "well-below":
-    "Across all four dimensions, your overall grit score has real room to grow — and that's genuinely good news, since this kind of trait responds quickly to small, deliberate practice.",
-};
-
-/** Graded, always-positive one-liner for the overall (all-4-facet-average) grit score. */
-export function overallGritSummary(overallYourScore: number, overallReference: number): string {
-  return OVERALL_GRIT_SUMMARY[tierFor(overallYourScore, overallReference)];
+/**
+ * Plain factual statement of the overall (all-4-facet-average) grit score — no tier
+ * judgment. The numbers already speak for themselves, and each facet gets its own graded
+ * interpretation below this; this line shouldn't editorialize on top of that.
+ */
+export function overallGritSummary(): string {
+  return "Across all four dimensions, here's your overall grit score:";
 }
 
 export interface GritHook {
   heading: string;
   stat: string;
   pivot: string;
-  /** Full MDGS facet breakdown (your score, reference average, live peer average). */
+  /** Full MDGS facet breakdown (your score vs. typical range). */
   facets: GritFacetScore[];
   /** Graded, plain-language interpretation of every facet — not just the highest one. */
   facetDescriptions: GritFacetDescription[];
 }
 
 /**
- * facets: the participant's real MDGS facet breakdown, already computed against live
- * in-study peers (see computeGritFacetBreakdown in scoring.ts) and sorted by the
- * participant's own score, highest first. Each facet also carries a fixed reference
- * average (GRIT_FACET_REFERENCE in scoring.ts) sourced from the validated MDGS norms for
- * this exact instrument, shown to participants as an unattributed "typical score" — never
- * cited by name in the UI. The live peerAverage stays separate and null until at least 3
- * real in-study peers have answered that facet, so the two numbers are never conflated.
+ * facets: the participant's real MDGS facet breakdown (see computeGritFacetBreakdown in
+ * scoring.ts), sorted by the participant's own score, highest first. Each facet also
+ * carries a fixed reference range (GRIT_FACET_REFERENCE_RANGE in scoring.ts) sourced from
+ * the validated MDGS norms for this exact instrument, shown to participants as an
+ * unattributed "typical score" range — never cited by name in the UI. No live peer/cohort
+ * comparison here.
  *
  * "Highest of your own four facets" is not the same as "above average" — someone's top
- * facet can still sit below the typical score (see facetDescriptions, which grades each
- * facet against its own reference point rather than against the participant's other
+ * facet can still sit below the typical range (see facetDescriptions, which grades each
+ * facet against its own reference range rather than against the participant's other
  * facets). The heading below only ever claims relative standing within their own profile,
  * never absolute strength, so it can't contradict the graded descriptions underneath it.
  */
@@ -206,6 +206,11 @@ export interface EnergyAllocationRowInsight {
   text: string;
 }
 
+export interface DiagnosticRatio {
+  label: string;
+  text: string;
+}
+
 export interface EnergyAllocationHook {
   id: "dual-core" | "deep-work-specialist" | "ecosystem-enabler" | "conservation-mode";
   archetypeName: string;
@@ -216,10 +221,72 @@ export interface EnergyAllocationHook {
   meaningParagraphs: string[];
   pivot: string;
   rowInsights: EnergyAllocationRowInsight[];
+  /** Task vs. Contextual Performance as a comparative split — "52% Execution / 48% Collaboration." */
+  bandwidthSplit: BandwidthSplit;
+  /** The Organizational Citizenship Ratio (Contextual / Task), graded against named bands. */
+  collaborationBalance: CollaborationBalanceReading & DiagnosticRatio;
+  /** TP4 ("keep my knowledge up-to-date") read against the rest of Task Performance. */
+  cognitiveCurrency: CognitiveCurrencyReading & DiagnosticRatio;
+  /** A demographic-specific read of the diagnostic ratios above — only shown when one genuinely applies. */
+  careerStageDiagnostic?: DiagnosticRatio;
+  /** A single, concrete operational adjustment to try before moving on. */
+  tuningParameter: string;
 }
 
 type RoleGroup = "ic" | "leader";
 type ExperienceTier = "newcomer" | "mid" | "veteran";
+
+// Engineers intuitively parse ratio/multiplier framing over an abstract "score," so both
+// diagnostic ratios below are phrased that way — what the number is doing, not how good it is.
+
+const COLLABORATION_BALANCE_COPY: Record<CollaborationBalanceReading["band"], { label: string; text: string }> = {
+  "altruism-tax": {
+    label: "Altruism Tax",
+    text: "You're generating disproportionate social capital for your team relative to your own ticket velocity — genuinely valuable, but worth watching for citizenship fatigue if individual output is what gets formally evaluated.",
+  },
+  "leaning-collaborative": {
+    label: "Leaning Collaborative",
+    text: "You're putting somewhat more energy into team-facing work than into your own execution right now — a reasonable lean, worth keeping an eye on if it keeps drifting further.",
+  },
+  balanced: {
+    label: "Balanced",
+    text: "Your execution and team-facing effort are running close to evenly matched — right around where balanced engineers in this field typically land.",
+  },
+  "leaning-execution": {
+    label: "Leaning Execution",
+    text: "You're putting somewhat more energy into your own execution than into team-facing work right now — a reasonable lean, worth watching if it keeps drifting further.",
+  },
+  "siloed-focus": {
+    label: "Siloed Focus Mode",
+    text: "You run clean, low-friction execution loops focused on your own tickets — strong independent output, but you may be under-leveraging your influence on team or architectural decisions.",
+  },
+};
+
+function describeCollaborationBalance(reading: CollaborationBalanceReading): CollaborationBalanceReading & DiagnosticRatio {
+  return { ...reading, ...COLLABORATION_BALANCE_COPY[reading.band] };
+}
+
+/**
+ * Cognitive Currency (TP4 alone) read against Execution Proficiency (the other four Task
+ * Performance items) — the "Knowledge-Execution Delta." A whole-module Task Performance
+ * average hides exactly this: someone can hit every delivery milestone while continuous
+ * learning quietly stalls under load, or the reverse.
+ */
+function describeCognitiveCurrency(reading: CognitiveCurrencyReading): CognitiveCurrencyReading & DiagnosticRatio {
+  const currencyHigh = bandForScore(reading.currency, 5) === "High";
+  const executionHigh = bandForScore(reading.executionProficiency, 5) === "High";
+  let text: string;
+  if (currencyHigh && executionHigh) {
+    text = "High active knowledge renewal despite a heavy execution load — you're keeping your skills current at the same time you're shipping.";
+  } else if (currencyHigh && !executionHigh) {
+    text = "You're prioritizing continuous learning even while pacing your delivery output — a deliberate investment in future capability.";
+  } else if (!currencyHigh && executionHigh) {
+    text = "Your knowledge renewal isn't keeping pace with your strong delivery output — a common trade-off under heavy load, worth deliberately protecting time for later so it doesn't compound.";
+  } else {
+    text = "Both delivery output and knowledge renewal are reading below your peak right now — consistent with a broader pacing pattern rather than a learning-specific gap.";
+  }
+  return { ...reading, label: "Cognitive Currency", text };
+}
 
 // Demographics' "role" field is exactly "Software Engineer" | "Designer/Architect" |
 // "Manager" (see DEMOGRAPHICS in schema.ts) — Designer/Architect and Manager both carry
@@ -232,6 +299,60 @@ function experienceTierFor(experience: string | undefined): ExperienceTier {
   if (experience === "<= 5") return "newcomer";
   if (experience === "10+") return "veteran";
   return "mid";
+}
+
+/**
+ * Mixes the two diagnostic ratios with role, tenure, and org type — but only surfaces a
+ * line when one of these specific, research-grounded scenarios genuinely applies (Salgado &
+ * Cabal 2011; Campbell 1990 on architect/lead role expectations; Igbaria & Siegel 1992;
+ * Sethi et al. 1999 on tenure-based friction), checked in priority order. Falls through to
+ * undefined — no generic filler paragraph — when nothing specific is actually true, so this
+ * never repeats what the archetype's own context/meaning copy already said.
+ */
+function careerStageDiagnostic(
+  roleGroup: RoleGroup,
+  experienceTier: ExperienceTier,
+  demographics: Record<string, string>,
+  taskHigh: boolean,
+  contextualHigh: boolean,
+  contextualRaw: number
+): DiagnosticRatio | undefined {
+  if (roleGroup === "leader" && taskHigh && !contextualHigh) {
+    return {
+      label: "What this means at your career stage:",
+      text: "In senior architectural and leadership roles, technical coordination and mentoring are structurally expected parts of the job. A dip in team collaboration here rarely reflects a lack of willingness — it usually means unplanned production fires or architectural complexity are pulling you into manually intervening in the codebase, rather than staying at the strategic-alignment level the role calls for.",
+    };
+  }
+
+  if (experienceTier === "veteran" && contextualRaw > 4.2) {
+    return {
+      label: "What this means at your career stage:",
+      text: "With over a decade of experience and this much active investment in team-facing work, you're operating as a primary knowledge transmitter for your team — the kind of institutional mentorship that measurably reduces onboarding time for newer hires.",
+    };
+  }
+
+  if (experienceTier === "newcomer" && contextualHigh && !taskHigh) {
+    return {
+      label: "What this means at your career stage:",
+      text: "Early in a career, taking on a lot of informal coordination before core technical mastery is fully solid tends to create steeper learning-curve friction later. Worth deliberately protecting more heads-down time for foundational skill-building alongside the collaboration.",
+    };
+  }
+
+  if (demographics.orgType === "Service Industry" && contextualHigh) {
+    return {
+      label: "What this means in your organization:",
+      text: "In service-delivery organizations, this level of contextual effort is typically voluntary, unbilled investment — genuinely valuable to your team, but a pattern that frequently drives burnout precisely because it isn't the work that gets formally measured.",
+    };
+  }
+
+  if (demographics.orgType === "Product" && taskHigh && contextualHigh) {
+    return {
+      label: "What this means in your organization:",
+      text: "In product engineering, balancing change-implementation work with code accuracy is exactly what keeps technical debt under control — this combination is your organization's version of doing the job well.",
+    };
+  }
+
+  return undefined;
 }
 
 interface ArchetypeCopy {
@@ -296,14 +417,24 @@ function ecosystemEnablerCopy(roleGroup: RoleGroup, role: string): ArchetypeCopy
   };
 }
 
-function conservationModeCopy(tier: ExperienceTier): ArchetypeCopy {
+function conservationModeCopy(tier: ExperienceTier, roleGroup: RoleGroup): ArchetypeCopy {
   if (tier === "newcomer") {
     return {
       contextText:
-        "Early in a career, your technical bandwidth is still being built — a reading like this isn't unusual, but it's worth understanding the cause rather than just pushing through.",
+        "With a few years in production environments, you've already built real technical capacity — a pullback like this usually isn't a skills gap.",
       meaningParagraphs: [
-        "Landing in Conservation Mode this early often means you've hit a steep technical-complexity wall — quietly struggling with a new framework or system rather than asking for help.",
-        "This is exactly the moment to lean on your own spirited initiative and pull in a senior peer — it's a faster path back to momentum than pushing through alone.",
+        "With a few years in production environments, entering Conservation Mode usually indicates boundary defense against creeping ticket scope — protecting your bandwidth from work that's expanded past what was originally agreed.",
+        "Worth naming explicitly to yourself, or your manager, what's actually been added to your plate recently, so the boundary stays a deliberate choice rather than something that erodes quietly over time.",
+      ],
+    };
+  }
+  if (tier === "veteran" && roleGroup === "leader") {
+    return {
+      contextText:
+        "With over a decade in the industry and in a leadership role, you've almost certainly seen this pattern before — in yourself and in the people you've mentored.",
+      meaningParagraphs: [
+        "For senior leaders, pulling back into tactical conservation often signals systemic fatigue from ongoing architectural churn, or from time spent unblocking junior team members — not a dip in capability.",
+        "Worth checking whether that support load has quietly become unsustainable. The fix here is usually structural — delegation, clearer ownership — rather than more personal effort.",
       ],
     };
   }
@@ -327,29 +458,54 @@ function conservationModeCopy(tier: ExperienceTier): ArchetypeCopy {
   };
 }
 
+// A single, concrete operational adjustment per archetype — a "tuning parameter" to try
+// before moving on, not another interpretation of the score.
+const TUNING_PARAMETER: Record<EnergyAllocationHook["id"], string> = {
+  "dual-core":
+    "Pick one day this week to go fully async — no live meetings. Running two demanding threads at once needs at least one day where neither gets interrupted by the other.",
+  "deep-work-specialist":
+    "Timebox one 30-minute, low-stakes check-in with a teammate this week. It keeps the collaborative thread from going fully dormant without costing your focus time.",
+  "ecosystem-enabler":
+    "Before your calendar fills up this week, block one 90-minute session for independent build time — protect at least one slice of uninterrupted execution.",
+  "conservation-mode":
+    "Audit your calendar for one recurring, low-yield sync meeting this sprint and decline or delegate it. Protect that block exclusively for undisturbed execution or mental recovery.",
+};
+
 /**
  * Fires after Contextual Performance, which always follows Task Performance in the fixed
  * module order, so both are guaranteed answered by then. A simple 2x2 on Task Performance
  * x Contextual Performance (each read against the same HIGH threshold used everywhere
  * else in this file) picks one of four non-judgmental archetypes, then role (for the three
- * archetypes with a clear expectation to compare against) or tenure (for Conservation
- * Mode, where the same low-low reading means something very different for a newcomer vs.
- * a veteran) personalizes the narrative. Demographics are always complete by this point —
- * they're required before any Likert module is reachable — so role/experience are real,
- * not guessed.
+ * archetypes with a clear expectation to compare against) or tenure + role (for
+ * Conservation Mode, where the same low-low reading means something very different for a
+ * newcomer vs. a veteran individual contributor vs. a veteran leader) personalizes the
+ * narrative. Demographics are always complete by this point — they're required before any
+ * Likert module is reachable — so role/experience are real, not guessed.
+ *
+ * bandwidthSplit/collaborationBalance/cognitiveCurrency are computed once, off the raw 1-5
+ * means and item scores (not the pct-of-5 banding used for archetype selection) — engineers
+ * read a "52/48 split" or a named ratio band as an operational fact about where energy is
+ * going, independent of which archetype that split happens to land in.
  */
 export function chooseEnergyAllocationHook(
   answers: Record<string, number>,
   demographics: Record<string, string>
 ): EnergyAllocationHook {
-  const taskPerformance = pctOf5(meanOf(TASK_PERFORMANCE_ITEMS, answers));
-  const contextualPerformance = pctOf5(meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers));
+  const taskRaw = meanOf(TASK_PERFORMANCE_ITEMS, answers);
+  const contextualRaw = meanOf(CONTEXTUAL_PERFORMANCE_ITEMS, answers);
+  const taskPerformance = pctOf5(taskRaw);
+  const contextualPerformance = pctOf5(contextualRaw);
   const taskHigh = taskPerformance >= HIGH;
   const contextualHigh = contextualPerformance >= HIGH;
+
+  const bandwidthSplit = computeBandwidthSplit(taskRaw, contextualRaw);
+  const collaborationBalance = describeCollaborationBalance(computeCollaborationBalance(taskRaw, contextualRaw));
+  const cognitiveCurrency = describeCognitiveCurrency(computeCognitiveCurrency(answers));
 
   const role = demographics.role || "professional";
   const roleGroup = roleGroupFor(demographics.role);
   const experienceTier = experienceTierFor(demographics.experience);
+  const careerStage = careerStageDiagnostic(roleGroup, experienceTier, demographics, taskHigh, contextualHigh, contextualRaw);
 
   const rowInsights: EnergyAllocationRowInsight[] = [
     {
@@ -379,8 +535,13 @@ export function chooseEnergyAllocationHook(
       meaningLabel: `What this means for you as a ${role}:`,
       meaningParagraphs: copy.meaningParagraphs,
       pivot:
-        "Next: running at this intensity means something has to be fueling it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind the pace.",
+        "Running two demanding threads at once takes fuel. The question is what's powering it, and whether that pace is sustainable. In the next module, we evaluate Techno-Overload and AI Anxiety to see what's behind the intensity.",
       rowInsights,
+      bandwidthSplit,
+      collaborationBalance,
+      cognitiveCurrency,
+      careerStageDiagnostic: careerStage,
+      tuningParameter: TUNING_PARAMETER["dual-core"],
     };
   }
 
@@ -395,8 +556,13 @@ export function chooseEnergyAllocationHook(
       meaningLabel: `What this means for you as a ${role}:`,
       meaningParagraphs: copy.meaningParagraphs,
       pivot:
-        "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's shaping this focus.",
+        "Protecting deep-work time this well isn't free — something has to be absorbing the rest of the noise around you. In the next module, we evaluate Techno-Overload and AI Anxiety to see what that's costing you.",
       rowInsights,
+      bandwidthSplit,
+      collaborationBalance,
+      cognitiveCurrency,
+      careerStageDiagnostic: careerStage,
+      tuningParameter: TUNING_PARAMETER["deep-work-specialist"],
     };
   }
 
@@ -411,17 +577,24 @@ export function chooseEnergyAllocationHook(
       meaningLabel: `What this means for you as a ${role}:`,
       meaningParagraphs: copy.meaningParagraphs,
       pivot:
-        "Next: let's measure the invisible friction in your workflow — technostress and AI anxiety — to see what's behind this pattern.",
+        "Being the team's glue takes real energy — the question is where that energy is coming from. In the next module, we evaluate Techno-Overload and AI Anxiety to see what's underneath this pattern.",
       rowInsights,
+      bandwidthSplit,
+      collaborationBalance,
+      cognitiveCurrency,
+      careerStageDiagnostic: careerStage,
+      tuningParameter: TUNING_PARAMETER["ecosystem-enabler"],
     };
   }
 
-  const copy = conservationModeCopy(experienceTier);
+  const copy = conservationModeCopy(experienceTier, roleGroup);
   const meaningLabel =
     experienceTier === "newcomer"
       ? "What this means early in your career:"
       : experienceTier === "veteran"
-        ? "What this means as a veteran engineer:"
+        ? roleGroup === "leader"
+          ? "What this means as a senior leader:"
+          : "What this means as a veteran engineer:"
         : "What this means at this stage of your career:";
   return {
     id: "conservation-mode",
@@ -432,8 +605,13 @@ export function chooseEnergyAllocationHook(
     meaningLabel,
     meaningParagraphs: copy.meaningParagraphs,
     pivot:
-      "Next: you're clearly conserving energy, which means something in your environment is likely draining it. Let's measure the invisible friction in your workflow — technostress and AI anxiety — to find the source of the drain.",
+      "Pacing your output is a defensive adaptation. The question is what environmental drag is forcing you to conserve. In the next module, we evaluate Techno-Overload and AI Anxiety to identify the source of the friction.",
     rowInsights,
+    bandwidthSplit,
+    collaborationBalance,
+    cognitiveCurrency,
+    careerStageDiagnostic: careerStage,
+    tuningParameter: TUNING_PARAMETER["conservation-mode"],
   };
 }
 
@@ -753,4 +931,133 @@ export function chooseConfidenceHook(
     pivot:
       "That's every piece of your profile mapped. Your full report connects them — including a closer look at where this specific gap is actually showing up in your day-to-day execution.",
   };
+}
+
+// --- 5. Full Combined Report — cross-construct archetype ------------------
+//
+// The final /results report synthesizes Grit + Occupational Self-Efficacy + Technostress
+// into one cross-construct archetype — the "so what does this all add up to" read. Efficacy
+// and Technostress are collapsed to a binary High/not-High split (this framework is
+// genuinely a 2x2 — environment demand × internal confidence); Grit stays at full 3-band
+// resolution because it's the one real fork inside the "high demand, low confidence"
+// quadrant: sheer-force coping (high grit) is a materially different story from genuine
+// risk (not), even though both start from the same environment+confidence reading. Every
+// branch only ever restates what bandForModule already found for that participant — this
+// can't credit or flag anything their own tier reports didn't already surface.
+
+export interface OverallArchetypeHook {
+  id: "resilient-innovator" | "overwhelmed-crusader" | "at-risk-friction" | "competent-maintainer" | "steady-starter";
+  name: string;
+  summary: string;
+  impact: string;
+  recommendation: string;
+}
+
+export function chooseOverallArchetype(gritBand: Band, efficacyBand: Band, technostressBand: Band): OverallArchetypeHook {
+  const efficacyHigh = efficacyBand === "High";
+  const technostressHigh = technostressBand === "High";
+  const gritHigh = gritBand === "High";
+
+  if (technostressHigh && efficacyHigh) {
+    return {
+      id: "resilient-innovator",
+      name: "The Resilient Innovator",
+      summary:
+        "You have the internal grit and technical confidence to appraise the demands on you as challenges worth solving, rather than threats to withstand.",
+      impact:
+        "That combination tends to show up as strong, dependable output on your day-to-day work, and a real willingness to take on the messier, cross-team problems other people route around.",
+      recommendation:
+        "Channel it into mentoring a peer through a tool you've already mastered, or lead one process improvement — but keep half an eye on your own reserves, since even well-resourced people can run themselves down quietly under sustained load.",
+    };
+  }
+
+  if (technostressHigh && !efficacyHigh && gritHigh) {
+    return {
+      id: "overwhelmed-crusader",
+      name: "The Overwhelmed Crusader",
+      summary:
+        "You're bringing real determination to a genuinely demanding environment, but your confidence in the tools themselves hasn't caught up yet — so you're getting to results through sheer persistence rather than smooth, efficient execution.",
+      impact:
+        "That usually still produces solid output, but at a real cost — brute-forcing your way through unfamiliar tools takes far more out of you than working from confidence would.",
+      recommendation:
+        "Targeted, hands-on practice with whichever specific tool feels least familiar will close this gap faster than more hours of grinding through it solo.",
+    };
+  }
+
+  if (technostressHigh && !efficacyHigh && !gritHigh) {
+    return {
+      id: "at-risk-friction",
+      name: "The At-Risk / High-Friction State",
+      summary:
+        "Right now, a demanding environment is meeting genuinely low reserves on both fronts — persistence and technical confidence — which is the combination most likely to make day-to-day work feel like a constant uphill push.",
+      impact:
+        "This is the pattern most worth addressing directly: it's the one most associated with real drops in output and with quietly disengaging rather than asking for help.",
+      recommendation:
+        "Break the single biggest source of friction into the smallest possible next step, and protect a hard boundary around after-hours technology demands while you rebuild some margin.",
+    };
+  }
+
+  if (!technostressHigh && efficacyHigh) {
+    return {
+      id: "competent-maintainer",
+      name: "The Competent Maintainer",
+      summary:
+        "Your current environment isn't placing much strain on you, and you feel genuinely capable of what it does ask of you — a stable, low-friction position to operate from.",
+      impact:
+        "That tends to produce steady, reliable output. The risk here isn't burnout — it's a plateau, since there's little in your day-to-day forcing new growth.",
+      recommendation:
+        "Deliberately volunteer for one cross-functional project or an emerging tool outside your current lane — you have the bandwidth to stretch on your own terms, rather than only in reaction to pressure.",
+    };
+  }
+
+  return {
+    id: "steady-starter",
+    name: "The Steady Starter",
+    summary:
+      "Your environment isn't currently demanding much of you technologically, and your confidence in these tools hasn't been tested much yet either — a perfectly ordinary place to be, not a warning sign.",
+    impact:
+      "Because the pressure is low, there's little right now forcing either your output or your confidence to move — this reads as a quiet stretch, not a risk.",
+    recommendation:
+      "Use the calm deliberately: build hands-on fluency with one tool now, on your own schedule, so you're not building it for the first time once real pressure actually shows up.",
+  };
+}
+
+// Tailored, always-actionable micro-steps keyed to whichever specific driver is highest —
+// deliberately actions, not score interpretations, so there's no tension with the
+// always-positive framing used for the score descriptions elsewhere in the report.
+const TECHNOSTRESS_ACTION: Record<string, string> = {
+  Overload: "Timebox one recurring source of digital overload this week — batch notifications into set windows instead of reacting to each one as it lands.",
+  Complexity: "Pick one tool you're currently working around rather than confidently using, and block 30 focused minutes of hands-on practice with it — not documentation, actual use.",
+  Uncertainty: "Ask your team directly what's actually changing in the next sprint or two — concrete answers tend to shrink uncertainty faster than waiting it out does.",
+};
+
+/** id: "Overload" | "Complexity" | "Uncertainty" — the highest-scoring Technostress subsection. */
+export function technostressAction(id: string): string {
+  return TECHNOSTRESS_ACTION[id] ?? TECHNOSTRESS_ACTION.Overload;
+}
+
+const EFFICACY_ACTION: Record<Band, string> = {
+  Low: "Build confidence through small, hands-on wins — a structured sandbox tutorial will move the needle faster than reading documentation passively.",
+  Moderate: "Pick one system or tool you're only partly confident in and go deep on it this month — moving it from workable to strong compounds quickly.",
+  High: "Your confidence is a resource — put it to work by pairing with someone earlier in their journey on the exact tool you've already mastered.",
+};
+
+export function efficacyAction(band: Band): string {
+  return EFFICACY_ACTION[band];
+}
+
+const GRIT_FACET_ACTION: Record<string, string> = {
+  spiritedInitiative:
+    "Your strongest asset under pressure is initiative — put it to visible use in sprint planning or retros, where speaking up early shapes outcomes for the whole team.",
+  adaptability:
+    "Your strongest asset is adjusting course quickly — volunteer to own the parts of a project most likely to change scope, since you'll adapt to shifts faster than most.",
+  perseveranceOfEffort:
+    "Your strongest asset is sustained effort — channel it into one meaningful stretch goal this quarter rather than spreading it thin across everything at once.",
+  steadfastness:
+    "Your strongest asset is staying the course through setbacks — that makes you the right person to own the work everyone else is tempted to abandon halfway through.",
+};
+
+/** id: the participant's single highest-scoring grit facet (facets[0].id from computeGritFacetBreakdown). */
+export function gritFacetAction(id: string): string {
+  return GRIT_FACET_ACTION[id] ?? GRIT_FACET_ACTION.perseveranceOfEffort;
 }

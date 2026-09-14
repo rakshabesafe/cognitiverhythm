@@ -29,8 +29,11 @@ export function ReportShell({ tier, heading, stat, pivot, responses, children }:
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 px-6 py-10">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard" className="text-sm text-muted underline underline-offset-2">
-          ← Your Profile
+        <Link
+          href="/dashboard"
+          className="flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-medium text-foreground/90"
+        >
+          <span aria-hidden="true">←</span> Your Profile
         </Link>
         <LogoutButton />
       </div>

@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import { chooseGritHook, overallGritSummary } from "@/lib/survey/hooks";
-import { computeGritFacetBreakdown, GRIT_OVERALL_REFERENCE } from "@/lib/survey/scoring";
+import {
+  computeGritFacetBreakdown,
+  GRIT_OVERALL_REFERENCE_MEAN,
+  GRIT_OVERALL_REFERENCE_RANGE,
+} from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { FacetDescriptions } from "@/components/survey/FacetDescriptions";
 import { ReportShell } from "@/components/survey/ReportShell";
@@ -15,9 +19,7 @@ export default async function GritReportPage() {
   const responses = await db.getResponses(userId);
   if (!responses.completedModules.includes("grit")) redirect("/dashboard");
 
-  const allResponses = await db.listAllResponses();
-  const peers = allResponses.filter((r) => r.userId !== userId);
-  const facets = computeGritFacetBreakdown(responses.answers, peers);
+  const facets = computeGritFacetBreakdown(responses.answers);
   const hook = chooseGritHook(facets);
 
   const overallYourScore = facets.reduce((sum, f) => sum + f.yourScore, 0) / facets.length;
@@ -30,11 +32,11 @@ export default async function GritReportPage() {
           id: f.id,
           label: f.label,
           yourScore: f.yourScore,
-          peerAverage: f.peerAverage,
-          referenceAverage: f.referenceAverage,
+          referenceMean: f.referenceMean,
+          referenceRange: f.referenceRange,
           max: 5,
         }))}
-        footnote={`${overallGritSummary(overallYourScore, GRIT_OVERALL_REFERENCE)} (${overallYourScore.toFixed(2)} / 5, typical is ${GRIT_OVERALL_REFERENCE.toFixed(2)} / 5.)`}
+        footnote={`${overallGritSummary()} ${overallYourScore.toFixed(2)} / 5 (typical mean is ${GRIT_OVERALL_REFERENCE_MEAN.toFixed(2)} / 5, range ${GRIT_OVERALL_REFERENCE_RANGE[0].toFixed(2)}–${GRIT_OVERALL_REFERENCE_RANGE[1].toFixed(2)}).`}
       />
       <FacetDescriptions facets={hook.facetDescriptions} />
     </ReportShell>
