@@ -64,26 +64,40 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
 
   const submitField = useCallback(
     async (rawValue: string) => {
+      if (saving) return;
       const code = field.code;
-      setValues((v) => ({ ...v, [code]: rawValue }));
+      const previousValue = values[code];
+      const newValues = { ...values, [code]: rawValue };
+      setValues(newValues);
       const data = await persist({ [code]: rawValue });
-      if (!data) return;
-      if (index === total - 1) {
+      if (!data) {
+        setValues((v) => ({
+          ...v,
+          [code]: previousValue !== undefined ? previousValue : undefined as unknown as string,
+        }));
+        return;
+      }
+      const nextUnansweredIndex = fields.findIndex((f) => newValues[f.code] === undefined);
+
+      if (nextUnansweredIndex === -1) {
         // Land back on the dashboard rather than auto-continuing into Grit, so the
         // participant explicitly chooses to start the next section instead of being
         // swept straight into it.
         router.push("/dashboard");
         router.refresh();
+      } else if (index === total - 1) {
+        setIndex(nextUnansweredIndex);
       } else {
         setIndex((i) => Math.min(i + 1, total - 1));
       }
     },
-    [field, index, total, persist, router]
+    [field, index, total, persist, router, saving, values, fields]
   );
 
   useEffect(() => {
     if (!started) return;
     function onKeyDown(e: KeyboardEvent) {
+      if (saving) return;
       if (field.type === "select") {
         const num = Number(e.key);
         if (Number.isInteger(num) && num >= 1 && num <= field.options.length) {
@@ -96,7 +110,7 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [started, field, submitField, goPrev]);
+  }, [started, field, submitField, goPrev, saving]);
 
   if (!started) {
     return (
@@ -156,6 +170,7 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
                   setNameDraft("");
                   void submitField("");
                 }}
+                disabled={saving}
                 className="flex-1 rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted hover:bg-surface-raised"
               >
                 Skip
@@ -163,6 +178,7 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
               <button
                 type="button"
                 onClick={() => void submitField(nameDraft.trim())}
+                disabled={saving}
                 className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-medium text-background"
               >
                 Continue
@@ -180,6 +196,7 @@ export function DemographicsRunner({ fields, initialValues, intro }: Demographic
                   role="radio"
                   aria-checked={selected}
                   onClick={() => void submitField(opt)}
+                  disabled={saving}
                   className={`flex min-h-14 items-center gap-3 rounded-xl border px-4 py-3 text-left text-base transition-colors ${
                     selected
                       ? "border-accent bg-accent/10 text-foreground"
