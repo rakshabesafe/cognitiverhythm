@@ -377,6 +377,7 @@ const PERFORMANCE_REFERENCE_RANGE_0_4: Record<string, ScoreRange> = {
 };
 
 function internalScaleRange(moduleId: string): ScoreRange | undefined {
+  if (moduleId === "grit") return GRIT_OVERALL_REFERENCE_RANGE;
   const raw = PERFORMANCE_REFERENCE_RANGE_0_4[moduleId];
   return raw ? [raw[0] + 1, raw[1] + 1] : undefined;
 }
