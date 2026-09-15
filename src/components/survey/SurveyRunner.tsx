@@ -43,7 +43,10 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
 
   const selectValue = useCallback(
     async (value: number) => {
-      setAnswers((a) => ({ ...a, [item.code]: value }));
+      if (saving) return;
+      const previousValue = answers[item.code];
+      const newAnswers = { ...answers, [item.code]: value };
+      setAnswers(newAnswers);
       setSaving(true);
       try {
         const res = await fetch("/api/survey/answer", {
@@ -60,10 +63,16 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
           showToast(data?.error ?? "Could not save your answer. Please try again.", "error");
+          setAnswers((a) => ({
+            ...a,
+            [item.code]: previousValue !== undefined ? previousValue : undefined as unknown as number,
+          }));
           return;
         }
         showToast("Saved");
-        if (index === total - 1) {
+        const nextUnansweredIndex = items.findIndex((i) => typeof newAnswers[i.code] !== "number");
+
+        if (nextUnansweredIndex === -1) {
           const nextRoute = data.nextRoute ?? "/dashboard";
           if (onModuleComplete) {
             onModuleComplete(nextRoute);
@@ -71,6 +80,8 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
             router.push(nextRoute);
             router.refresh();
           }
+        } else if (index === total - 1) {
+          setIndex(nextUnansweredIndex);
         } else {
           setIndex((i) => Math.min(i + 1, total - 1));
         }
@@ -78,12 +89,13 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
         setSaving(false);
       }
     },
-    [item, index, total, router, showToast, onModuleComplete]
+    [item, index, total, router, showToast, onModuleComplete, saving, answers, items]
   );
 
   useEffect(() => {
     if (!started) return;
     function onKeyDown(e: KeyboardEvent) {
+      if (saving) return;
       const num = Number(e.key);
       if (Number.isInteger(num) && num >= 1 && num <= labels.length) {
         e.preventDefault();
@@ -97,7 +109,7 @@ export function SurveyRunner({ title, intro, labels, items, initialAnswers, onMo
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [started, selectValue, goPrev, goNext, answers, item, labels.length]);
+  }, [started, selectValue, goPrev, goNext, answers, item, labels.length, saving]);
 
   if (!started) {
     return (
