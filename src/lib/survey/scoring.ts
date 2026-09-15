@@ -253,13 +253,15 @@ export const GRIT_OVERALL_REFERENCE_MEAN =
  */
 export type ScoreTier = "well-below" | "below" | "typical" | "above" | "well-above";
 
-// Spirited Initiative gets its own fixed 5-band scale (rather than the reference-range
-// comparison every other facet uses) because its interpretation is role-specific and
-// operational — "what does this look like in your job" — not a comparison to a typical
-// peer score. The bands partition the full 1-5 scale exhaustively.
-export type SpiritedInitiativeBand = "very-high" | "high" | "medium" | "low" | "very-low";
+// Some grit facets (currently Spirited Initiative and Perseverance of Effort) get a fixed
+// 5-band scale, rather than the reference-range comparison the other facets use, because
+// their interpretation is role-specific and operational — "what does this look like in
+// your job" — not a comparison to a typical peer score. The bands partition the full 1-5
+// scale exhaustively and are shared across every facet that uses this scale, so a "High"
+// on one means the same underlying score range as a "High" on another.
+export type OperationalBand = "very-high" | "high" | "medium" | "low" | "very-low";
 
-export function bandForSpiritedInitiative(score: number): SpiritedInitiativeBand {
+export function operationalBandForScore(score: number): OperationalBand {
   if (score >= 4.6) return "very-high";
   if (score >= 3.8) return "high";
   if (score >= 3.2) return "medium";

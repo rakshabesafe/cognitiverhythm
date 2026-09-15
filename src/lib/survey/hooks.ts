@@ -4,11 +4,11 @@
 import {
   bandForModule,
   bandForScore,
-  bandForSpiritedInitiative,
   computeBandwidthSplit,
   computeCognitiveCurrency,
   computeCollaborationBalance,
   HIGH,
+  operationalBandForScore,
   tierForRange,
   type Band,
   type BandwidthSplit,
@@ -17,9 +17,9 @@ import {
   type CounterweightReading,
   type EfficacyDeliveryReading,
   type GritFacetScore,
+  type OperationalBand,
   type PersistenceQualityReading,
   type ScoreTier,
-  type SpiritedInitiativeBand,
 } from "./scoring";
 
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
@@ -148,43 +148,47 @@ export interface GritFacetDescription {
   tagline?: string;
   whyItMatters?: string;
   whyItMattersLabel?: string;
-  /** Present only for Spirited Initiative — its role-calibrated operational read. */
-  spiritedInitiative?: SpiritedInitiativeReading;
+  /** Present only for facets with a role-calibrated operational read (currently Spirited Initiative and Perseverance of Effort). */
+  operationalRead?: OperationalReading;
 }
 
-// Spirited Initiative's operational read is role-specific in a way the other three facets
-// aren't: the same score means "dives into production alerts unprompted" for an engineer,
-// "writes ADRs ahead of a migration" for an architect, and "clears cross-team roadblocks"
-// for a manager. This exact three-way split matches demographics.role's own options
-// (Software Engineer / Designer/Architect / Manager), so it reads the field directly
-// rather than reusing the coarser ic/leader grouping the other reports use.
-type SpiritedInitiativeRole = "engineer" | "architect" | "manager";
+// Spirited Initiative and Perseverance of Effort's operational reads are role-specific in a
+// way the other two facets aren't: the same score means something different depending on
+// whether it shows up in debugging loops (engineer), a multi-quarter migration (architect),
+// or shielding a team's delivery commitments (manager). This exact three-way split matches
+// demographics.role's own options (Software Engineer / Designer/Architect / Manager), so it
+// reads the field directly rather than reusing the coarser ic/leader grouping the other
+// reports use.
+type OperationalRole = "engineer" | "architect" | "manager";
 
-function spiritedInitiativeRoleFor(role: string | undefined): SpiritedInitiativeRole {
+function operationalRoleFor(role: string | undefined): OperationalRole {
   if (role === "Designer/Architect") return "architect";
   if (role === "Manager") return "manager";
   return "engineer";
 }
 
-interface SpiritedInitiativeReading {
-  band: SpiritedInitiativeBand;
+interface OperationalReading {
+  band: OperationalBand;
   /** The named "operational state" for this role + band, e.g. "The Autonomous Vanguard". */
   title: string;
   interpretation: string;
   calibrationTip: string;
 }
 
-interface SpiritedInitiativeCopy {
+interface OperationalCopy {
   title: string;
   interpretation: string;
   calibrationTip: string;
 }
 
-// Every "very-low" entry stays genuinely honest about the operational state (this facet's
-// whole point is naming what initiative looks like under real distress) while still
-// framing the calibration tip as a concrete, achievable next step rather than a verdict —
-// matching the house rule of never leaving a participant with nothing to do about a score.
-const SPIRITED_INITIATIVE_COPY: Record<SpiritedInitiativeRole, Record<SpiritedInitiativeBand, SpiritedInitiativeCopy>> = {
+type OperationalCopyTable = Record<OperationalRole, Record<OperationalBand, OperationalCopy>>;
+
+// Every "very-low" entry stays genuinely honest about the operational state (that's the
+// whole point of an operational read — naming what a trait looks like under real distress)
+// while still framing the calibration tip as a concrete, achievable next step rather than a
+// verdict — matching the house rule of never leaving a participant with nothing to do about
+// a score.
+const SPIRITED_INITIATIVE_COPY: OperationalCopyTable = {
   engineer: {
     "very-high": {
       title: "The Autonomous Vanguard",
@@ -298,12 +302,131 @@ const SPIRITED_INITIATIVE_COPY: Record<SpiritedInitiativeRole, Record<SpiritedIn
   },
 };
 
-/** Spirited Initiative's role-calibrated read: an absolute-score band, not a peer/reference comparison. */
-function describeSpiritedInitiative(score: number, role: string | undefined): SpiritedInitiativeReading {
-  const band = bandForSpiritedInitiative(score);
-  const copy = SPIRITED_INITIATIVE_COPY[spiritedInitiativeRoleFor(role)][band];
+const PERSEVERANCE_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Relentless Finisher",
+      interpretation:
+        "You see hard debugging loops, tricky concurrency bugs, and edge-case testing through to production readiness without abandoning the task — you don't leave features at the \"half-done proof-of-concept\" stage.",
+      calibrationTip:
+        "Watch for the sunk-cost trap: if a dependency or algorithmic path is clearly failing after hours of effort, a smart pivot (see your Adaptability score) usually yields more than stubborn grinding.",
+    },
+    high: {
+      title: "The Steady Finisher",
+      interpretation:
+        "You have solid, reliable follow-through — you push past initial syntax friction and environment setup hurdles to deliver stable, well-tested code.",
+      calibrationTip:
+        "This is the optimal zone for individual contributors — dependable velocity without the burnout risk that comes with obsessive over-commitment.",
+    },
+    medium: {
+      title: "The Pragmatic Finisher",
+      interpretation:
+        "You persevere well when tasks are clearly defined and milestones are tangible. When an obscure bug or a failing pipeline drags on without clear progress, though, your stamina starts to taper.",
+      calibrationTip:
+        "When you hit a prolonged roadblock, slice it into smaller, measurable sub-tasks — quick, visible wins tend to replenish stamina faster than grinding on the whole problem at once.",
+    },
+    low: {
+      title: "The Sprint Explorer",
+      interpretation:
+        "You thrive in early-stage ideation, spiking solutions, and quick prototypes, but your energy drops noticeably during repetitive debugging, test coverage, and documentation work.",
+      calibrationTip:
+        "Pairing with a detail-oriented teammate for cleanup sprints, or working in strict short focus intervals, tends to carry mundane delivery work over the finish line without draining you.",
+    },
+    "very-low": {
+      title: "The Fragmented Executor",
+      interpretation:
+        "Sustaining energy on projects that span multiple sprints is genuinely difficult — obstacles often lead to a stalled pull request or attention shifting to a different, less demanding task.",
+      calibrationTip:
+        "This usually points to cognitive fatigue or too much context-switching rather than a lack of capability. Cutting your active work-in-progress down to a single ticket at a time is the fastest way to rebuild follow-through.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Tenacious Custodian",
+      interpretation:
+        "You have the stamina to shepherd multi-quarter migrations, domain-driven refactoring, and enterprise architectural standards through, even as priorities shift underneath them.",
+      calibrationTip:
+        "Watch for \"ivory tower\" dogmatism — check that you're not stubbornly defending an idealized design the development teams find impractical to actually build.",
+    },
+    high: {
+      title: "The Structural Anchor",
+      interpretation:
+        "You maintain strong technical focus, making sure non-functional requirements — latency, security, scalability — aren't quietly bargained away during a crunch.",
+      calibrationTip:
+        "This level is the right balance of structural discipline and pragmatism for sustaining a technical roadmap over the long horizon.",
+    },
+    medium: {
+      title: "The Flexible Architect",
+      interpretation:
+        "You advocate for sound design patterns, but under sustained pressure from product timelines you'll often concede compromises and take on technical debt.",
+      calibrationTip:
+        "When you do make a compromise, log an ADR and a tech-debt repayment ticket in the same moment — it keeps the long-term design intent from getting permanently lost.",
+    },
+    low: {
+      title: "The Conceptual Designer",
+      interpretation:
+        "You produce strong initial conceptual blueprints and system sketches, but staying embedded through the operational rollout is harder to sustain, which can leave room for implementation drift.",
+      calibrationTip:
+        "Partnering closely with a senior developer who enjoys execution governance helps make sure your architectural vision actually lands in production code.",
+    },
+    "very-low": {
+      title: "The Compromised Architect",
+      interpretation:
+        "Sustained organizational friction and conflicting requirements have worn down your appetite to defend the architecture, so teams end up building ad-hoc solutions without systemic guidance.",
+      calibrationTip:
+        "This points to structural fatigue rather than a lack of vision. Reclaiming agency over one critical interface or system boundary — and firmly establishing standards there first — is a realistic place to start.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Indomitable Driver",
+      interpretation:
+        "You relentlessly shield your team's long-term commitments, working to clear cross-team friction and push critical deliverables across the line.",
+      calibrationTip:
+        "Don't project your own endurance threshold onto your squad — relentless drive without built-in recovery time for the team is a fast path to attrition.",
+    },
+    high: {
+      title: "The Resilient Lead",
+      interpretation:
+        "You reliably navigate your team through high-pressure sprints, restructuring, and delivery crunches, keeping organizational focus without panic.",
+      calibrationTip:
+        "Keep this steady tempo — it's what gives your team the psychological safety and stability to sustain predictable velocity.",
+    },
+    medium: {
+      title: "The Adaptive Coordinator",
+      interpretation:
+        "You maintain steady operational follow-through during standard cycles, but when a project runs into prolonged resistance or complex cross-functional blocks, your momentum starts to slow.",
+      calibrationTip:
+        "Escalating cross-team dependency blockers earlier — rather than absorbing the friction quietly — tends to keep momentum from stalling out.",
+    },
+    low: {
+      title: "The Reactive Manager",
+      interpretation:
+        "Multi-sprint strategic initiatives — team tooling, tech-debt cleanup — tend to slide in favor of whatever is making the most immediate noise.",
+      calibrationTip:
+        "Blocking out a recurring weekly \"operational health\" review protects strategic backlog items from being fully swallowed by daily firefighting.",
+    },
+    "very-low": {
+      title: "The Depleted Lead",
+      interpretation:
+        "Recurring roadblocks and shifting directives have left you running on empty, which shows up as passive oversight — milestones slip with little active intervention.",
+      calibrationTip:
+        "This is a classic sign of organizational burnout, not a personal shortfall. Stepping back to audit your team's commitments and renegotiating realistic delivery dates with your own leadership is the direct fix.",
+    },
+  },
+};
+
+/** A facet's role-calibrated read against the shared operational band scale — not a peer/reference comparison. */
+function describeOperationalRead(score: number, role: string | undefined, table: OperationalCopyTable): OperationalReading {
+  const band = operationalBandForScore(score);
+  const copy = table[operationalRoleFor(role)][band];
   return { band, ...copy };
 }
+
+const OPERATIONAL_COPY_BY_FACET: Partial<Record<string, OperationalCopyTable>> = {
+  spiritedInitiative: SPIRITED_INITIATIVE_COPY,
+  perseveranceOfEffort: PERSEVERANCE_COPY,
+};
 
 /**
  * One graded, always-positive description per facet, in the same order as `facets`.
@@ -319,6 +442,7 @@ export function describeGritFacets(facets: GritFacetScore[], role?: string): Gri
     const copy = GRIT_FACET_COPY[f.id];
     const variant = useLeaderCopy ? copy.leader : undefined;
     const tier = tierForRange(f.yourScore, f.referenceRange);
+    const operationalTable = OPERATIONAL_COPY_BY_FACET[f.id];
     return {
       id: f.id,
       label: f.label,
@@ -328,7 +452,7 @@ export function describeGritFacets(facets: GritFacetScore[], role?: string): Gri
       tagline: variant?.tagline ?? copy.tagline,
       whyItMatters: variant?.whyItMatters ?? copy.whyItMatters,
       whyItMattersLabel: variant?.whyItMattersLabel,
-      spiritedInitiative: f.id === "spiritedInitiative" ? describeSpiritedInitiative(f.yourScore, role) : undefined,
+      operationalRead: operationalTable ? describeOperationalRead(f.yourScore, role, operationalTable) : undefined,
     };
   });
 }
