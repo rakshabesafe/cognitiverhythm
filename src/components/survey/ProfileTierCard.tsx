@@ -23,7 +23,7 @@ export function ProfileTierCard({ tier, unlocked, percent, continueHref }: Profi
             {tier.title}
             <span className="text-xs font-normal text-accent">🔓 Unlocked</span>
           </p>
-          <p className="truncate text-sm text-muted">{tier.teaser}</p>
+          <p className="text-sm text-muted">{tier.teaser}</p>
         </div>
         <span className="shrink-0 text-sm text-accent">View →</span>
       </Link>
@@ -43,7 +43,7 @@ export function ProfileTierCard({ tier, unlocked, percent, continueHref }: Profi
           {tier.title}
           <span className="text-xs font-normal text-muted">🔒 Locked</span>
         </p>
-        <p className="truncate text-sm text-muted">{tier.teaser}</p>
+        <p className="text-sm text-muted">{tier.teaser}</p>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
           <div className="h-full rounded-full bg-accent" style={{ width: `${percent}%` }} />
         </div>
