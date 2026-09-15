@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { MongoClient, MongoError, type Db } from "mongodb";
+import { MongoClient, MongoError, MongoServerError, type Db } from "mongodb";
 import { computeCompletion } from "./completion";
 import type { DataStore, ResponseRecord, UserRecord } from "./types";
 
@@ -173,6 +173,41 @@ export const mongoStore: DataStore = {
       };
       await db.collection<UserDoc>("users").insertOne(doc);
       await db.collection<ResponseDoc>("responses").insertOne(emptyResponseDoc(doc._id));
+      return toUserRecord(doc);
+    });
+  },
+
+  async importParticipant(input) {
+    return withDb(async (db) => {
+      const now = new Date().toISOString();
+      // No lastLoginAt: an imported participant has never signed in, and inventing one
+      // would inflate the dashboard's "active in the last 7 days" count.
+      const doc: UserDoc = {
+        _id: randomUUID(),
+        email: input.email.toLowerCase(),
+        passwordHash: input.passwordHash,
+        createdAt: input.createdAt ?? now,
+        ...(input.consentAt ? { consentAt: input.consentAt } : {}),
+      };
+
+      try {
+        await db.collection<UserDoc>("users").insertOne(doc);
+      } catch (error) {
+        if (error instanceof MongoServerError && error.code === 11000) return null;
+        throw error;
+      }
+
+      const { completedModules, completedAt } = computeCompletion(input.demographics, input.answers, undefined);
+      await db.collection<ResponseDoc>("responses").insertOne({
+        _id: doc._id,
+        userId: doc._id,
+        demographics: input.demographics,
+        answers: input.answers,
+        completedModules,
+        ...(completedAt ? { completedAt } : {}),
+        updatedAt: now,
+      });
+
       return toUserRecord(doc);
     });
   },

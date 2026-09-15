@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { LIKERT_MODULES } from "@/lib/survey/schema";
 import type { UserRecord } from "@/lib/db";
 import { AdminLogoutButton } from "@/components/ui/AdminLogoutButton";
+import { ImportCsv } from "@/components/admin/ImportCsv";
 import { UserTable } from "@/components/admin/UserTable";
 
 const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -85,6 +86,8 @@ export default async function AdminDashboardPage() {
       >
         Download CSV export
       </a>
+
+      <ImportCsv />
     </main>
   );
 }
