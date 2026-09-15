@@ -108,7 +108,7 @@ export default async function DashboardPage() {
                 Full Combined Report
                 <span className="text-xs font-normal text-accent">🔓 Unlocked</span>
               </p>
-              <p className="truncate text-sm text-muted">
+              <p className="text-sm text-muted">
                 Synthesizes your operating archetype, cross-correlates your stress to output balance and provides personalized calibration habits
               </p>
             </div>
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
                 Full Combined Report
                 <span className="text-xs font-normal text-muted">🔒 Locked</span>
               </p>
-              <p className="truncate text-sm text-muted">
+              <p className="text-sm text-muted">
                 Synthesizes your operating archetype, cross-correlates your stress to output balance and provides personalized calibration habits
               </p>
             </div>
