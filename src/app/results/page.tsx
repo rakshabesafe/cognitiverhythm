@@ -5,6 +5,8 @@ import { requireParticipant } from "@/lib/auth/session";
 import {
   chooseOverallArchetype,
   describeConfidenceRow,
+  describeCounterweight,
+  describeEfficacyDelivery,
   describeGritFacets,
   describeStressRow,
   efficacyAction,
@@ -15,12 +17,32 @@ import {
   bandForModule,
   bandForScore,
   computeBenchmark,
+  computeCounterweight,
+  computeDrainFactors,
+  computeEfficacyDeliveryGap,
   computeGritFacetBreakdown,
+  computeModuleMeanForAnswers,
   computePeerAverages,
   computeSectionBreakdown,
+  moduleMax,
 } from "@/lib/survey/scoring";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 import { PrintButton } from "@/components/ui/PrintButton";
+import { ResourceLoopDiagram, type FlowFactor } from "@/components/survey/ResourceLoopDiagram";
+
+const GRIT_FACET_EMOJI: Record<string, string> = {
+  perseveranceOfEffort: "💪",
+  adaptability: "🔄",
+  spiritedInitiative: "🚀",
+  steadfastness: "🛡️",
+};
+
+const DRAIN_EMOJI: Record<string, string> = {
+  Overload: "⚡",
+  Complexity: "🧩",
+  Uncertainty: "🌀",
+  "ai-anxiety": "🤖",
+};
 
 export default async function ResultsPage() {
   const userId = await requireParticipant();
@@ -39,13 +61,51 @@ export default async function ResultsPage() {
   const archetype = chooseOverallArchetype(gritBand, efficacyBand, technostressBand);
 
   const facets = computeGritFacetBreakdown(responses.answers);
-  const topFacets = describeGritFacets(facets).slice(0, 2);
+  const topFacets = describeGritFacets(facets, responses.demographics.role).slice(0, 2);
   const topFacetId = facets[0].id;
 
   const techSections = computeSectionBreakdown("technostress", responses.answers, peers);
   const topTechSection = techSections[0];
   const techAlert = describeStressRow(topTechSection.id, bandForScore(topTechSection.yourScore, topTechSection.max));
   const efficacyAlert = describeConfidenceRow(efficacyBand);
+
+  const buildingFactors: FlowFactor[] = facets.map((f) => ({
+    id: f.id,
+    label: f.label,
+    emoji: GRIT_FACET_EMOJI[f.id] ?? "🌱",
+    score: f.yourScore,
+    max: 5,
+  }));
+  const drainingFactors: FlowFactor[] = computeDrainFactors(responses.answers).map((f) => ({
+    id: f.id,
+    label: f.label,
+    emoji: DRAIN_EMOJI[f.id] ?? "⚡",
+    score: f.score,
+    max: f.max,
+  }));
+  const counterweight = computeCounterweight(responses.answers);
+  const counterweightCopy = counterweight ? describeCounterweight(counterweight) : null;
+  const efficacyDelivery = describeEfficacyDelivery(computeEfficacyDeliveryGap(responses.answers));
+  const selfEfficacyReading = {
+    score: computeModuleMeanForAnswers("self-efficacy", responses.answers) ?? 0,
+    max: moduleMax("self-efficacy"),
+  };
+  const performanceOutcomes = {
+    task: {
+      id: "task-performance",
+      label: "Task Performance",
+      emoji: "✅",
+      score: computeModuleMeanForAnswers("task-performance", responses.answers) ?? 0,
+      max: moduleMax("task-performance"),
+    },
+    contextual: {
+      id: "contextual-performance",
+      label: "Contextual Performance",
+      emoji: "🤝",
+      score: computeModuleMeanForAnswers("contextual-performance", responses.answers) ?? 0,
+      max: moduleMax("contextual-performance"),
+    },
+  };
 
   const name = responses.demographics.name?.trim();
   const role = responses.demographics.role;
@@ -120,9 +180,34 @@ export default async function ResultsPage() {
         </div>
       </section>
 
-      {/* Section 2: Executive summary + drivers + alerts */}
+      {/* Section 2: Resource loop — Grit building vs. Technostress/AI Anxiety draining */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-foreground">2. Your Operating Profile</h2>
+        <h2 className="text-lg font-semibold text-foreground">2. Your Resource Loop</h2>
+        <ResourceLoopDiagram
+          building={buildingFactors}
+          draining={drainingFactors}
+          selfEfficacy={selfEfficacyReading}
+          outcomes={performanceOutcomes}
+        />
+
+        {counterweightCopy && (
+          <div className="rounded-2xl border border-border bg-surface p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Your counterweight</p>
+            <p className="mb-1 text-sm font-medium text-foreground">{counterweightCopy.label}</p>
+            <p className="text-sm text-foreground/90">{counterweightCopy.text}</p>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Confidence vs. delivery</p>
+          <p className="mb-1 text-sm font-medium text-foreground">{efficacyDelivery.label}</p>
+          <p className="text-sm text-foreground/90">{efficacyDelivery.text}</p>
+        </div>
+      </section>
+
+      {/* Section 3: Executive summary + drivers + alerts */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-foreground">3. Your Operating Profile</h2>
 
         <div className="rounded-2xl border border-accent/40 bg-accent/10 p-5">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-accent">Executive summary</p>
@@ -162,7 +247,7 @@ export default async function ResultsPage() {
 
       {/* Section 3: Tailored micro-actions */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-foreground">3. Tailored Micro-Actions</h2>
+        <h2 className="text-lg font-semibold text-foreground">4. Tailored Micro-Actions</h2>
         <div className="flex flex-col gap-3">
           {[technostressAction(topTechSection.id), efficacyAction(efficacyBand), gritFacetAction(topFacetId), archetype.recommendation].map(
             (action, idx) => (

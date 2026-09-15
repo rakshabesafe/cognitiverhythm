@@ -20,8 +20,18 @@ export function FacetDescriptions({ facets }: { facets: GritFacetDescription[] }
               {TIER_LABEL[f.tier]}
             </span>
           </div>
-          <p className="mb-2 text-xs text-muted">{f.meaning}</p>
+          {f.tagline && <p className="mb-1 text-sm font-medium text-accent">{f.tagline}</p>}
+          <p className="mb-2 text-xs text-muted">
+            {f.tagline && <span className="font-medium">What it measures: </span>}
+            {f.meaning}
+          </p>
           <p className="text-sm text-foreground/90">{f.description}</p>
+          {f.whyItMatters && (
+            <p className="mt-2 border-t border-border pt-2 text-sm text-foreground/90">
+              <span className="font-medium text-foreground">{f.whyItMattersLabel ?? "Why it matters in software"}: </span>
+              {f.whyItMatters}
+            </p>
+          )}
         </div>
       ))}
     </div>

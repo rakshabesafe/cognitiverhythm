@@ -110,6 +110,12 @@ export function computeModuleMeanForAnswers(moduleId: string, answers: Record<st
   return mod ? moduleMean(mod, answers) : null;
 }
 
+/** The top of a module's own response scale (e.g. 7 for AI Job Anxiety's agree7 scale). */
+export function moduleMax(moduleId: string): number {
+  const mod = LIKERT_MODULES.find((m) => m.id === moduleId);
+  return mod ? SCALES[mod.scale].labels.length : 5;
+}
+
 export interface QuestionStat {
   code: string;
   text: string;
@@ -321,6 +327,15 @@ export interface SectionScore {
   reference?: SectionReference;
 }
 
+/** A module's item `section` groupings, in the order they first appear in the instrument. */
+function sectionCodeGroups(mod: LikertModule): { id: string; codes: string[] }[] {
+  const sections: string[] = [];
+  for (const item of mod.items) {
+    if (item.section && !sections.includes(item.section)) sections.push(item.section);
+  }
+  return sections.map((id) => ({ id, codes: mod.items.filter((i) => i.section === id).map((i) => i.code) }));
+}
+
 /**
  * Breaks a module down by its items' `section` groupings (e.g. Technostress splits into
  * Overload / Complexity / Uncertainty), scored against live in-study peers and sorted by
@@ -338,14 +353,8 @@ export function computeSectionBreakdown(
   if (!mod) return [];
   const max = SCALES[mod.scale].labels.length;
 
-  const sections: string[] = [];
-  for (const item of mod.items) {
-    if (item.section && !sections.includes(item.section)) sections.push(item.section);
-  }
-
-  return sections
-    .map((section) => {
-      const codes = mod.items.filter((i) => i.section === section).map((i) => i.code);
+  return sectionCodeGroups(mod)
+    .map(({ id: section, codes }) => {
       const yourScore = facetMean(codes, answers) ?? 0;
       const peerMeans = peerResponses
         .map((r) => facetMean(codes, r.answers))
@@ -471,4 +480,187 @@ export function bandForModule(moduleId: string, answers: Record<string, number>)
  */
 export function bandForScore(score: number, max: number): Band {
   return bandFor(toPct(score, max));
+}
+
+// --- Dual-process readings ------------------------------------------------
+//
+// The three readings below all sit on the same model the Resource Loop visual is built
+// from: Grit builds Occupational Self-Efficacy while Technostress and AI Job Anxiety
+// deplete it, and that net balance is what shows up in Task/Contextual Performance. Each
+// is a comparison between two figures the participant actually answered — never a
+// predicted or synthesized score.
+
+/** One resource-depleting demand, normalized so constructs on different scales are comparable. */
+export interface DrainFactor {
+  id: string;
+  label: string;
+  score: number;
+  max: number;
+  /** 0-1 share of this factor's own scale — the only sound way to rank a 5-point construct against a 7-point one. */
+  pct: number;
+}
+
+const DRAIN_LABEL: Record<string, string> = {
+  Overload: "Techno-Overload",
+  Complexity: "Techno-Complexity",
+  Uncertainty: "Techno-Uncertainty",
+  "ai-anxiety": "AI Anxiety (Job Replacement)",
+};
+
+/** The four demands in this study's model: Technostress's three sub-dimensions plus AI Job Anxiety. */
+export function computeDrainFactors(answers: Record<string, number>): DrainFactor[] {
+  const technostress = LIKERT_MODULES.find((m) => m.id === "technostress");
+  const technostressMax = technostress ? SCALES[technostress.scale].labels.length : 5;
+  const sections = technostress
+    ? sectionCodeGroups(technostress).map(({ id, codes }) => ({
+        id,
+        label: DRAIN_LABEL[id] ?? id,
+        score: facetMean(codes, answers) ?? 0,
+        max: technostressMax,
+      }))
+    : [];
+
+  const aiAnxietyMax = moduleMax("ai-anxiety");
+  const factors = [
+    ...sections,
+    {
+      id: "ai-anxiety",
+      label: DRAIN_LABEL["ai-anxiety"],
+      score: computeModuleMeanForAnswers("ai-anxiety", answers) ?? 0,
+      max: aiAnxietyMax,
+    },
+  ];
+
+  return factors.map((f) => ({ ...f, score: Math.round(f.score * 100) / 100, pct: toPct(f.score, f.max) }));
+}
+
+// Which Grit dimension this study's framework treats as the buffer for each demand:
+// Steadfastness withstands the resource drain of techno-overload, Spirited Initiative
+// converts techno-complexity into skill acquisition rather than avoidance, and
+// Adaptability absorbs constant technological churn — including the AI transition, where
+// having navigated past shifts is the evidence base for navigating the next one.
+const COUNTERWEIGHT_FACET: Record<string, string> = {
+  Overload: "steadfastness",
+  Complexity: "spiritedInitiative",
+  Uncertainty: "adaptability",
+  "ai-anxiety": "adaptability",
+};
+
+export interface CounterweightReading {
+  /** The participant's single heaviest demand, by share of its own scale. */
+  drain: DrainFactor;
+  facetId: string;
+  facetLabel: string;
+  facetScore: number;
+  /** The buffering facet graded against its own MDGS reference range. */
+  facetTier: ScoreTier;
+  /** True when that facet is sitting at or above its typical band — the counterweight is in place. */
+  holding: boolean;
+}
+
+/**
+ * Pairs the participant's heaviest demand with the Grit dimension this study's framework
+ * maps as its specific buffer, and reports whether that dimension is currently at or above
+ * its typical band. Returns null only if the Grit module hasn't been answered.
+ */
+export function computeCounterweight(answers: Record<string, number>): CounterweightReading | null {
+  const drains = computeDrainFactors(answers);
+  if (drains.length === 0) return null;
+  const drain = drains.reduce((heaviest, f) => (f.pct > heaviest.pct ? f : heaviest));
+
+  const facetId = COUNTERWEIGHT_FACET[drain.id] ?? "adaptability";
+  const facet = GRIT_FACETS.find((f) => f.id === facetId);
+  const facetScore = facet ? facetMean(facet.items, answers) : null;
+  if (!facet || facetScore === null) return null;
+
+  const facetTier = tierForRange(facetScore, GRIT_FACET_REFERENCE_RANGE[facetId] ?? GRIT_OVERALL_REFERENCE_RANGE);
+  return {
+    drain,
+    facetId,
+    facetLabel: facet.label,
+    facetScore: Math.round(facetScore * 100) / 100,
+    facetTier,
+    holding: facetTier === "typical" || facetTier === "above" || facetTier === "well-above",
+  };
+}
+
+export type PersistenceQualityBand =
+  | "deep-persistence"
+  | "leaning-persistence"
+  | "intelligent-persistence"
+  | "leaning-pivot"
+  | "fast-pivot";
+
+export interface PersistenceQualityReading {
+  ratio: number;
+  band: PersistenceQualityBand;
+  adaptability: number;
+  perseverance: number;
+}
+
+/**
+ * Adaptability ÷ Perseverance of Effort — whether persistence is being steered or applied
+ * flat-out. The MDGS reference means for these two facets (3.81 and 3.74) put the typical
+ * ratio at ≈ 1.02, so the balanced band brackets that rather than an arbitrary 1.00; the
+ * ±0.05 / ±0.15 steps around it match the band widths used for the Collaboration Balance
+ * ratio elsewhere in this file. Both facets sit on the same 1-5 MDGS scale, so this is a
+ * like-for-like ratio.
+ */
+export function computePersistenceQuality(answers: Record<string, number>): PersistenceQualityReading {
+  const adaptabilityFacet = GRIT_FACETS.find((f) => f.id === "adaptability");
+  const perseveranceFacet = GRIT_FACETS.find((f) => f.id === "perseveranceOfEffort");
+  const adaptability = adaptabilityFacet ? (facetMean(adaptabilityFacet.items, answers) ?? 0) : 0;
+  const perseverance = perseveranceFacet ? (facetMean(perseveranceFacet.items, answers) ?? 0) : 0;
+
+  if (perseverance <= 0) {
+    return { ratio: 0, band: "intelligent-persistence", adaptability, perseverance };
+  }
+
+  const ratio = Math.round((adaptability / perseverance) * 100) / 100;
+  let band: PersistenceQualityBand;
+  if (ratio > 1.15) band = "fast-pivot";
+  else if (ratio > 1.05) band = "leaning-pivot";
+  else if (ratio >= 0.95) band = "intelligent-persistence";
+  else if (ratio >= 0.85) band = "leaning-persistence";
+  else band = "deep-persistence";
+
+  return {
+    ratio,
+    band,
+    adaptability: Math.round(adaptability * 100) / 100,
+    perseverance: Math.round(perseverance * 100) / 100,
+  };
+}
+
+export type EfficacyDeliveryBand = "delivery-ahead" | "aligned" | "confidence-ahead";
+
+export interface EfficacyDeliveryReading {
+  /** Each side as a share of its own scale — Self-Efficacy is a 6-point construct, Performance a 5-point one. */
+  efficacyPct: number;
+  performancePct: number;
+  band: EfficacyDeliveryBand;
+}
+
+// Two different instruments on two different scales, so this compares share-of-own-scale
+// rather than raw means, and only calls a difference real once it exceeds 10 points of
+// scale — a slightly more conservative bar than the 8% used for same-instrument peer
+// comparisons above, since cross-instrument gaps carry more measurement noise.
+const EFFICACY_DELIVERY_THRESHOLD = 0.1;
+
+/**
+ * Measured Occupational Self-Efficacy against measured Task + Contextual Performance —
+ * whether someone's confidence in their capability is tracking what they're actually
+ * producing. Both figures are self-reported, so this reads as a calibration signal, never
+ * as evidence that one of the two is "wrong."
+ */
+export function computeEfficacyDeliveryGap(answers: Record<string, number>): EfficacyDeliveryReading {
+  const efficacyPct = pctForModule("self-efficacy", answers);
+  const performancePct =
+    (pctForModule("task-performance", answers) + pctForModule("contextual-performance", answers)) / 2;
+
+  const gap = performancePct - efficacyPct;
+  const band: EfficacyDeliveryBand =
+    gap > EFFICACY_DELIVERY_THRESHOLD ? "delivery-ahead" : gap < -EFFICACY_DELIVERY_THRESHOLD ? "confidence-ahead" : "aligned";
+
+  return { efficacyPct, performancePct, band };
 }

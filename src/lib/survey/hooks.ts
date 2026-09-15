@@ -13,7 +13,10 @@ import {
   type BandwidthSplit,
   type CognitiveCurrencyReading,
   type CollaborationBalanceReading,
+  type CounterweightReading,
+  type EfficacyDeliveryReading,
   type GritFacetScore,
+  type PersistenceQualityReading,
   type ScoreTier,
 } from "./scoring";
 
@@ -33,11 +36,29 @@ function pctOf5(mean: number): number {
 
 // --- 1. Grit Profile → pivots into Technology & Team ---------------------------
 
+interface GritFacetVariant {
+  tagline?: string;
+  meaning?: string;
+  whyItMatters?: string;
+  whyItMattersLabel?: string;
+}
+
 interface GritFacetCopy {
   /** Plain-language definition of what this dimension actually measures. */
   meaning: string;
   /** One always-positive interpretation per gradation, keyed against the reference score. */
   tiers: Record<ScoreTier, string>;
+  /** Optional one-line framing of the dimension in engineering terms. */
+  tagline?: string;
+  /** Optional "why this matters in software specifically" — the operational consequence of the trait. */
+  whyItMatters?: string;
+  /**
+   * Overrides for participants in a leadership role, where the same underlying trait is
+   * tested by team, roadmap, and capacity decisions rather than by hands-on technical work.
+   * Only the fields present here are swapped; the graded tier interpretations are shared,
+   * since those are read against the same MDGS reference ranges regardless of role.
+   */
+  leader?: GritFacetVariant;
 }
 
 // Every tier is written to sound encouraging — even "well-below" is framed as fast,
@@ -61,8 +82,19 @@ const GRIT_FACET_COPY: Record<string, GritFacetCopy> = {
     },
   },
   adaptability: {
+    tagline: "Your architectural pivot speed and learning agility.",
     meaning:
-      "How well you notice when something isn't working, learn from it, and change your approach — rather than sticking with a plan that's stopped serving you.",
+      "How quickly you recognize when an implementation isn't working, let go of dead ends, and alter your approach without losing momentum.",
+    whyItMatters:
+      "In production systems, brute-force perseverance often causes burnout and technical debt. High adaptability keeps your persistence intelligent — letting you pivot across framework churn, refactor failing designs, and turn PR feedback into cleaner system execution.",
+    leader: {
+      tagline: "Your operational flexibility and organizational recalibration speed.",
+      meaning:
+        "How effectively you pivot team direction, adjust project constraints, and navigate organizational uncertainty without compromising team morale or delivery stability.",
+      whyItMattersLabel: "Why it matters for leaders",
+      whyItMatters:
+        "In high-velocity technology environments, rigid project management accelerates developer burnout and turnover. High managerial adaptability lets you act as an operational shock absorber — realigning roadmap priorities and shielding your squad's focus during periods of rapid change.",
+    },
     tiers: {
       "well-above":
         "You're exceptionally adaptable — you read situations quickly and change course without hesitation. That's one of the rarer, more valuable traits in fast-moving technical work.",
@@ -111,15 +143,71 @@ export interface GritFacetDescription {
   meaning: string;
   tier: ScoreTier;
   description: string;
+  tagline?: string;
+  whyItMatters?: string;
+  whyItMattersLabel?: string;
 }
 
-/** One graded, always-positive description per facet, in the same order as `facets`. */
-export function describeGritFacets(facets: GritFacetScore[]): GritFacetDescription[] {
+/**
+ * One graded, always-positive description per facet, in the same order as `facets`.
+ * `role` is the participant's own demographics.role: Managers and Designer/Architects get
+ * the leadership framing of a dimension where one exists, since their version of the trait
+ * plays out through team and roadmap decisions rather than hands-on technical work. An
+ * absent or unrecognized role falls back to the individual-contributor copy — that's the
+ * general-purpose wording, so it's the safer default when role isn't known.
+ */
+export function describeGritFacets(facets: GritFacetScore[], role?: string): GritFacetDescription[] {
+  const useLeaderCopy = role !== undefined && roleGroupFor(role) === "leader";
   return facets.map((f) => {
     const copy = GRIT_FACET_COPY[f.id];
+    const variant = useLeaderCopy ? copy.leader : undefined;
     const tier = tierForRange(f.yourScore, f.referenceRange);
-    return { id: f.id, label: f.label, meaning: copy.meaning, tier, description: copy.tiers[tier] };
+    return {
+      id: f.id,
+      label: f.label,
+      meaning: variant?.meaning ?? copy.meaning,
+      tier,
+      description: copy.tiers[tier],
+      tagline: variant?.tagline ?? copy.tagline,
+      whyItMatters: variant?.whyItMatters ?? copy.whyItMatters,
+      whyItMattersLabel: variant?.whyItMattersLabel,
+    };
   });
+}
+
+// Adaptability read against Perseverance of Effort — whether persistence is being steered
+// or applied flat-out. Grounded in the same critique that motivated the MDGS itself (Credé
+// et al., 2017): effort alone predicts performance poorly in fast-changing domains, because
+// rigid persistence on an approach that has stopped paying off is indistinguishable from
+// effort right up until the deadline. Framed in delivery terms rather than trait terms, and
+// every band names a genuine strength first — a high score on either facet is never a
+// deficiency, only a different balance point.
+const PERSISTENCE_QUALITY_COPY: Record<PersistenceQualityReading["band"], { label: string; text: string }> = {
+  "deep-persistence": {
+    label: "Deep Persistence",
+    text: "Your persistence runs well ahead of your pivot speed — real staying power on the problems most people abandon. The one thing to watch is the sunk-cost trap: hours spent hammering a failing test or brute-forcing a dependency that stepping back would have re-routed in minutes. A deliberate checkpoint partway through long debugging sessions is usually all it takes to keep that persistence pointed at the goal rather than at the approach.",
+  },
+  "leaning-persistence": {
+    label: "Leaning Persistence",
+    text: "You lean slightly toward staying with an approach rather than changing it — dependable follow-through on problems that genuinely need time to yield. Adding one explicit \"is this still the right approach?\" checkpoint on long tasks is usually enough to keep that from tipping into sunk cost.",
+  },
+  "intelligent-persistence": {
+    label: "Intelligent Persistence",
+    text: "Your persistence and your pivot speed are closely matched. You stay with hard problems, but you re-route rather than brute-force when an approach stops paying off — which is where effort converts most efficiently into shipped work, and the balance point the whole construct is aiming at.",
+  },
+  "leaning-pivot": {
+    label: "Leaning Pivot",
+    text: "You lean slightly toward changing approach over staying with one — genuinely useful in a stack that churns, and it keeps you out of dead ends most people sit in far too long. Worth occasionally holding a line one iteration longer on the problems whose payoff is deep rather than quick.",
+  },
+  "fast-pivot": {
+    label: "Fast Pivot",
+    text: "Your pivot speed runs well ahead of your persistence — you adapt fast and rarely get stuck in dead ends, which is a real asset against framework churn and shifting requirements. The available upside is on the small number of problems that only yield to sustained depth: deliberately picking one or two a month to stay with longer tends to move this quickly.",
+  },
+};
+
+/** The Adaptability ÷ Perseverance of Effort ratio, graded into a named band. */
+export function describePersistenceQuality(reading: PersistenceQualityReading): PersistenceQualityReading & DiagnosticRatio {
+  return { ...reading, ...PERSISTENCE_QUALITY_COPY[reading.band] };
 }
 
 /**
@@ -155,9 +243,9 @@ export interface GritHook {
  * facets). The heading below only ever claims relative standing within their own profile,
  * never absolute strength, so it can't contradict the graded descriptions underneath it.
  */
-export function chooseGritHook(facets: GritFacetScore[]): GritHook {
+export function chooseGritHook(facets: GritFacetScore[], role?: string): GritHook {
   const top = facets[0];
-  const facetDescriptions = describeGritFacets(facets);
+  const facetDescriptions = describeGritFacets(facets, role);
 
   // None of these claim an absolute strength level — that would risk contradicting a
   // facet's graded description above if the participant's relative-highest still sits
@@ -1026,6 +1114,57 @@ export function chooseOverallArchetype(gritBand: Band, efficacyBand: Band, techn
     recommendation:
       "Use the calm deliberately: build hands-on fluency with one tool now, on your own schedule, so you're not building it for the first time once real pressure actually shows up.",
   };
+}
+
+// Pairs the participant's heaviest demand with the Grit dimension this study's framework
+// treats as its specific buffer (see COUNTERWEIGHT_FACET in scoring.ts). This is the one
+// place the two halves of the model are named against each other for a single participant,
+// so the copy stays specific about the mechanism rather than claiming grit cancels strain.
+const COUNTERWEIGHT_MECHANISM: Record<string, string> = {
+  Overload:
+    "Steadfastness is the dimension that absorbs overload — holding composure and a sense of purpose when the pace and the volume spike at once.",
+  Complexity:
+    "Spirited Initiative is the dimension that converts complexity into capability — the proactive push to actually master an unfamiliar tool instead of building workarounds for it.",
+  Uncertainty:
+    "Adaptability is the dimension that absorbs churn — pivoting with the stack rather than being knocked off balance each time it moves.",
+  "ai-anxiety":
+    "Adaptability is the dimension that steadies this one — every technology transition you've already navigated is the evidence base for navigating the next.",
+};
+
+/** The heaviest demand, named alongside the Grit dimension positioned to offset it. */
+export function describeCounterweight(reading: CounterweightReading): DiagnosticRatio {
+  // The mechanism sentence already names the dimension, so this only carries the number.
+  const mechanism = COUNTERWEIGHT_MECHANISM[reading.drain.id] ?? COUNTERWEIGHT_MECHANISM.Uncertainty;
+  const facetScore = `Yours sits at ${reading.facetScore.toFixed(2)} / 5`;
+  return {
+    label: `Heaviest demand: ${reading.drain.label} — ${reading.drain.score.toFixed(2)} / ${reading.drain.max}`,
+    text: reading.holding
+      ? `${mechanism} ${facetScore}, at or above its typical band — so the counterweight to your heaviest demand is currently in place. That specific pairing is the thing most worth protecting as your load shifts.`
+      : `${mechanism} ${facetScore}, below its typical band right now — which makes it your highest-leverage place to invest, because it's the dimension pointed directly at the demand you're carrying most of.`,
+  };
+}
+
+// Measured confidence against measured output. Both sides are self-reported, so a gap
+// reads as a calibration signal, never as proof that one of the two figures is wrong —
+// and neither direction is written as a failure.
+const EFFICACY_DELIVERY_COPY: Record<EfficacyDeliveryReading["band"], DiagnosticRatio> = {
+  "delivery-ahead": {
+    label: "Your delivery is running ahead of your self-read",
+    text: "You're shipping and supporting your team at a level your own confidence rating hasn't caught up to. That gap is extremely common in engineering — it usually reflects how the work gets recorded rather than how capable you are, since finished tickets disappear from view the moment they close while open problems stay visible all day. Keeping a running log of what you actually shipped tends to close it faster than producing more work does.",
+  },
+  aligned: {
+    label: "Your confidence and your delivery are tracking together",
+    text: "Your self-assessment is well-calibrated against what you're actually producing — the two readings agree. That makes your own read on your capacity a reliable input for decisions about what to take on next, which is a genuinely useful position to be in.",
+  },
+  "confidence-ahead": {
+    label: "Your confidence is running ahead of your current output",
+    text: "You trust your capability more than your recent delivery numbers reflect. That self-trust is a real resource, and this pattern much more often points at the environment than at the person — under-stretched assignments, blocked dependencies, or a stretch of work that hasn't asked much of you. Worth asking what would actually put your capability to use.",
+  },
+};
+
+/** Measured Occupational Self-Efficacy read against measured Task + Contextual Performance. */
+export function describeEfficacyDelivery(reading: EfficacyDeliveryReading): DiagnosticRatio {
+  return EFFICACY_DELIVERY_COPY[reading.band];
 }
 
 // Tailored, always-actionable micro-steps keyed to whichever specific driver is highest —
