@@ -109,7 +109,7 @@ export default async function DashboardPage() {
                 <span className="text-xs font-normal text-accent">🔓 Unlocked</span>
               </p>
               <p className="truncate text-sm text-muted">
-                Your peer benchmark, operating profile, and strategic action plan — all in one place.
+                Synthesizes your operating archetype, cross-correlates your stress to output balance and provides personalized calibration habits
               </p>
             </div>
             <span className="shrink-0 text-sm text-accent">View →</span>
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
                 <span className="text-xs font-normal text-muted">🔒 Locked</span>
               </p>
               <p className="truncate text-sm text-muted">
-                Unlocks once every profile above is complete.
+                Synthesizes your operating archetype, cross-correlates your stress to output balance and provides personalized calibration habits
               </p>
             </div>
           </div>
