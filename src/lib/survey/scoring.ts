@@ -290,6 +290,12 @@ export function selfEfficacyBandForScore(score: number): OperationalBand {
   return bandFromCutoffs(score, [5.4, 4.5, 3.5, 2.5]);
 }
 
+// AI Job Replacement Anxiety's own cutoffs — the ai-anxiety module is a 1-7 scale (agree7),
+// not the 1-5 scale the Technostress sub-dimensions share.
+export function aiAnxietyBandForScore(score: number): OperationalBand {
+  return bandFromCutoffs(score, [5.8, 4.6, 3.5, 2.3]);
+}
+
 // The Technostress sub-dimensions' shared cutoffs, per Tarafdar et al. (2007) / Ragu-Nathan
 // et al. (2008) — a 1-5 scale like the grit facets, but with independently authored tier
 // boundaries. Techno-Overload and Techno-Uncertainty both use this exact scale.

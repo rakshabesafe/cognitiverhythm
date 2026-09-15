@@ -2,6 +2,7 @@
 // Each report ends on a "pivot" — a hook into the profile that comes next: traits (Grit)
 // → output (Technology & Team) → environment (Stress) → mindset (Confidence).
 import {
+  aiAnxietyBandForScore,
   bandForModule,
   bandForScore,
   computeBandwidthSplit,
@@ -1499,6 +1500,125 @@ const TECHNOSTRESS_OPERATIONAL_COPY: Record<string, OperationalCopyTable> = {
 export function describeTechnostressOperationalRead(id: string, score: number, role: string | undefined): OperationalReading | null {
   const table = TECHNOSTRESS_OPERATIONAL_COPY[id];
   return table ? describeOperationalRead(technostressBandForScore(score), role, table) : null;
+}
+
+const AI_ANXIETY_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Replacement Spiral",
+      interpretation:
+        "Watching generative models and autonomous agents author complex functions, tests, and scaffolds triggers genuine dread about your future employability — it feels like code-generation speed will erode the market value of developers.",
+      calibrationTip:
+        "Move your identity up the abstraction layer: AI generates syntax, but humans still design invariants, data models, business logic constraints, and failure handling. Repositioning from \"code writer\" to \"intent architect and validator\" is the direct answer to this.",
+    },
+    high: {
+      title: "The Skill Parity Watcher",
+      interpretation:
+        "There's continuous pressure to keep up with AI tools just to avoid falling behind — routine engineering tasks evaporating is a real worry.",
+      calibrationTip:
+        "An orchestration mindset — using AI to strip out mundane scaffolding and boilerplate while directing your own energy toward deep systems architecture, distributed debugging, and performance profiling — keeps your value where AI can't easily reach.",
+    },
+    medium: {
+      title: "The Strategic Adapter",
+      interpretation:
+        "You recognize generative tooling is genuinely reshaping delivery economics, but you stay calm and adaptable about it — treating the shift more like the arrival of cloud platforms than an existential threat.",
+      calibrationTip:
+        "This is a healthy, sustainable baseline. Focusing on system-level integration — how microservices communicate, how state holds across distributed boundaries — compounds well from here.",
+    },
+    low: {
+      title: "The Augmented Builder",
+      interpretation:
+        "You integrate AI assistants into your IDE with confidence, treating them as junior copilot assistance that boosts your personal velocity without threatening your craft.",
+      calibrationTip:
+        "Worth using that boosted bandwidth to take ownership of complex cross-service dependencies, and to mentor peers who are still finding their footing with these workflows.",
+    },
+    "very-low": {
+      title: "The Unshaken Craftsman",
+      interpretation:
+        "You feel essentially zero career vulnerability from AI — deep algorithmic intuition, telemetry analysis, and complex problem decomposition don't read as things a token predictor can replace.",
+      calibrationTip:
+        "Worth making sure that confidence doesn't tip into complacency — proactively exploring how AI tooling can automate the tedious parts of the job keeps your focus on the problems that actually need you.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Enterprise Automator Threat",
+      interpretation:
+        "Automated system synthesis, self-tuning infrastructure, and emerging LLM reasoning engines feel like they could erode the strategic authority of architects and commoditize systems design.",
+      calibrationTip:
+        "A model can suggest a standard topology, but it can't arbitrate organizational trade-offs, compliance politics, or risk tolerance. Grounding your authority in organizational alignment, domain governance, and operational resilience is what stays genuinely yours.",
+    },
+    high: {
+      title: "The Paradigm Shift Apprehension",
+      interpretation:
+        "Established enterprise patterns and architectural blueprints feel like they're being invalidated faster than you can build governance around them.",
+      calibrationTip:
+        "Shifting from defending static architectures to governing dynamic AI capabilities — leading the ADRs that set standard model-context protocols, retrieval systems, and API boundaries — puts you ahead of the shift instead of behind it.",
+    },
+    medium: {
+      title: "The Pragmatic Systems Evaluator",
+      interpretation:
+        "You treat AI as an evolving architectural component — real operational risk (hallucinations, security leaks) alongside a clear productivity gain.",
+      calibrationTip:
+        "Formalizing AI integration patterns across your squads — clear guidelines for data-boundary protection, latency budgets, fallback mechanisms — turns this pragmatism into something the whole org can rely on.",
+    },
+    low: {
+      title: "The Systems Orchestrator",
+      interpretation:
+        "You're confident that rapid AI-driven code generation actually increases the demand for rigorous architecture, clean interfaces, and resilient distributed platforms.",
+      calibrationTip:
+        "Building systemic guardrails — contract testing and observability pipelines that catch hidden technical debt from rapidly generated code — is the natural next investment.",
+    },
+    "very-low": {
+      title: "The Sovereign Architect",
+      interpretation:
+        "You see a clean division between pattern-matching models and principled systems engineering — AI reads as an auxiliary utility, not a threat to systemic decision-making.",
+      calibrationTip:
+        "Worth actively designing systems to support agentic AI capabilities rather than treating automated workflows as outside your architectural roadmap.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Downsizing Dread",
+      interpretation:
+        "You worry leadership will expect AI to exponentially increase output, leading to aggressive developer downsizing and the elimination of engineering management layers.",
+      calibrationTip:
+        "Pivoting your value proposition away from routine status tracking and toward coaching, strategic alignment, and team psychological safety is the direct answer — AI can't resolve interpersonal friction, negotiate stakeholder expectations, or hold onto your engineers for you.",
+    },
+    high: {
+      title: "The Productivity Benchmark Pressure",
+      interpretation:
+        "You feel real executive pressure to produce an immediate delivery-velocity spike from AI adoption, worried that not showing clear ROI will reflect on your leadership.",
+      calibrationTip:
+        "Educating leadership with objective delivery telemetry — that faster drafting still needs careful review, integration testing, and production verification — protects against an outage-shaped overcorrection.",
+    },
+    medium: {
+      title: "The Pragmatic Delivery Lead",
+      interpretation:
+        "You see AI tools as a genuinely helpful way to absorb sprint scope, while understanding delivery still fundamentally rests on team cohesion and clarity.",
+      calibrationTip:
+        "Encouraging safe team experimentation with developer tools, alongside clear norms on privacy, IP protection, and code review standards, keeps this pragmatic stance sustainable.",
+    },
+    low: {
+      title: "The Confident People Leader",
+      interpretation:
+        "You're secure in your organizational impact — empathetic leadership, talent cultivation, and sprint unblocking read clearly as human functions.",
+      calibrationTip:
+        "Guiding your team in using AI for their own growth — accelerating junior engineers' learning curves without letting them skip foundational problem-solving — puts that confidence to good use.",
+    },
+    "very-low": {
+      title: "The Grounded Cultural Anchor",
+      interpretation:
+        "You feel total clarity in your managerial identity — team building and engineering culture read as essentially unaffected by the technology shift.",
+      calibrationTip:
+        "Tracking emerging AI delivery benchmarks (automated test coverage velocity, review turnaround) keeps your delivery reporting aligned with where executive attention is heading.",
+    },
+  },
+};
+
+/** AI Job Replacement Anxiety's role-calibrated operational read, keyed off its own 1-7 scale bands. */
+export function describeAiAnxietyOperationalRead(score: number, role: string | undefined): OperationalReading {
+  return describeOperationalRead(aiAnxietyBandForScore(score), role, AI_ANXIETY_COPY);
 }
 
 export interface StressHook {
