@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
 import {
@@ -63,6 +64,9 @@ export default async function ResultsPage() {
           </p>
         </div>
         <div className="no-print flex shrink-0 items-center gap-3">
+          <Link href="/dashboard" className="text-sm text-muted hover:text-foreground">
+            Go to profile
+          </Link>
           <LogoutButton />
         </div>
       </div>
