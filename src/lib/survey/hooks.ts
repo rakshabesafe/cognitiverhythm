@@ -9,6 +9,7 @@ import {
   computeCollaborationBalance,
   HIGH,
   operationalBandForScore,
+  selfEfficacyBandForScore,
   tierForRange,
   type Band,
   type BandwidthSplit,
@@ -167,7 +168,7 @@ function operationalRoleFor(role: string | undefined): OperationalRole {
   return "engineer";
 }
 
-interface OperationalReading {
+export interface OperationalReading {
   band: OperationalBand;
   /** The named "operational state" for this role + band, e.g. "The Autonomous Vanguard". */
   title: string;
@@ -416,9 +417,128 @@ const PERSEVERANCE_COPY: OperationalCopyTable = {
   },
 };
 
-/** A facet's role-calibrated read against the shared operational band scale — not a peer/reference comparison. */
-function describeOperationalRead(score: number, role: string | undefined, table: OperationalCopyTable): OperationalReading {
-  const band = operationalBandForScore(score);
+const STEADFASTNESS_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Unyielding Builder",
+      interpretation:
+        "Critical pull-request rejections, failed sprint demos, or an abandoned feature branch don't shake your sense of competence — you read setbacks as a standard feedback loop, not a personal failure.",
+      calibrationTip:
+        "Watch for the flip side of staying this unshaken — make sure it doesn't stop valid technical feedback from actually landing and changing your approach.",
+    },
+    high: {
+      title: "The Resilient Coder",
+      interpretation:
+        "When a production deploy breaks or a favorite implementation gets scrapped by a scope change, you absorb the disappointment quickly and redirect your energy into the new path.",
+      calibrationTip:
+        "This is an optimal engineering state — it gives you staying power through high-pressure releases without calcifying into stubborn rigidity.",
+    },
+    medium: {
+      title: "The Grounded Executor",
+      interpretation:
+        "You handle everyday bugs and routine code review comments well, but a severe regression or having weeks of work deprioritized causes a noticeable, temporary dip in morale.",
+      calibrationTip:
+        "Anchoring your sense of progress to engineering fundamentals — what you actually learned or built — rather than whether one specific PR ships tends to steady that dip faster.",
+    },
+    low: {
+      title: "The Sensitive Developer",
+      interpretation:
+        "A harsh code review, a failed interview, or a production bug can leave a lingering emotional toll, showing up as hesitation and risk-aversion on the tasks that follow.",
+      calibrationTip:
+        "Treating a critique as an objective read on system constraints, rather than a read on you, is the mental move that tends to shorten that lingering effect.",
+    },
+    "very-low": {
+      title: "The Defeated Contributor",
+      interpretation:
+        "Technical adversity can feel overwhelming — a single major deployment failure or an architectural rejection is enough to trigger real demotivation and withdrawal.",
+      calibrationTip:
+        "This is a sign of psychological depletion, not a capability gap. Working with your lead to take on smaller, more predictable tasks for a stretch is a realistic way to rebuild a sense of safety.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Indomitable Visionary",
+      interpretation:
+        "You hold unwavering conviction in your system principles — when executive sponsors push back or a delivery squad resists a modernization roadmap, you keep the vision steady.",
+      calibrationTip:
+        "Balance that steadfastness with stakeholder empathy — holding a vision too rigidly through a genuine business pivot can alienate the delivery teams who bear the cost of implementing it.",
+    },
+    high: {
+      title: "The Pragmatic Anchor",
+      interpretation:
+        "You absorb conflicting organizational demands, a failed pilot, or a vendor deprecation with calm composure, recalibrating the technical strategy without losing sight of the core target.",
+      calibrationTip:
+        "This is the ideal tier for architects — it keeps the enterprise architecture stable across quarters while staying genuinely open to necessary trade-offs.",
+    },
+    medium: {
+      title: "The Adaptive Lead",
+      interpretation:
+        "You stay steadfast when business leadership is aligned, but a prolonged governance battle or a string of architectural compromises can start to wear at your conviction.",
+      calibrationTip:
+        "Formalizing ADRs early keeps your design rationale on record and resilient, even as the political weather around it changes.",
+    },
+    low: {
+      title: "The Conceding Architect",
+      interpretation:
+        "Continuous pushback from delivery squads and business stakeholders can lead you to compromise on system standards sooner than you'd like, leaving the design more fragmented than intended.",
+      calibrationTip:
+        "Building a core coalition of senior engineers to co-own and defend the architectural standards takes the weight off fighting every governance battle alone.",
+    },
+    "very-low": {
+      title: "The Disillusioned Lead",
+      interpretation:
+        "Sustained technical debt, thin executive air cover, and repeated project cancellations have worn down your belief that architectural elegance is even reachable here.",
+      calibrationTip:
+        "This reflects real organizational fatigue, not a loss of vision. Narrowing your focus to stabilizing one critical boundary, rather than the whole legacy estate, is a realistic place to rebuild.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Bedrock Leader",
+      interpretation:
+        "You act as an unshakeable shield for your squad — missed quarterly targets, budget freezes, or sudden organizational churn get absorbed without projecting panic downward.",
+      calibrationTip:
+        "Make sure that emotional durability doesn't lead you to underestimate the genuine distress and exhaustion your team members feel at their own, lower thresholds.",
+    },
+    high: {
+      title: "The Steady Captain",
+      interpretation:
+        "You navigate delivery road bumps, escalations, and tough client conversations with grounded resolve, keeping your squad's morale and direction cohesive.",
+      calibrationTip:
+        "This baseline is what gives an engineering pod the psychological containment it needs to maintain velocity through a crunch period.",
+    },
+    medium: {
+      title: "The Contextual Lead",
+      interpretation:
+        "You keep your squad motivated through standard sprint pressure, but a compound crisis — a client escalation landing alongside key attrition — can shake your composure.",
+      calibrationTip:
+        "Leaning on peer delivery managers for operational support, so the escalation burden is shared, keeps acute adversity from turning into chronic fatigue.",
+    },
+    low: {
+      title: "The Reactive Buffer",
+      interpretation:
+        "Rejection from leadership or client dissatisfaction can trigger acute anxiety, leading you to rapidly reshuffle team priorities in a way that disrupts developer flow.",
+      calibrationTip:
+        "A mandatory 24-hour buffer before an executive or client escalation gets passed down as an emergency sprint change gives you room to filter it first.",
+    },
+    "very-low": {
+      title: "The Burned-Out Steward",
+      interpretation:
+        "Relentless delivery pressure and a lack of organizational control have worn down your belief that you can actually shape outcomes here — the external forces feel like they're winning.",
+      calibrationTip:
+        "This is acute leadership burnout. Seeking immediate managerial support to reset deliverables, reduce scope, and restore your own boundaries is the direct next step.",
+    },
+  },
+};
+
+/**
+ * A role-calibrated read for an already-banded score — not a peer/reference comparison.
+ * Takes the band rather than a raw score because different instruments (grit facets on a
+ * 1-5 scale, Occupational Self-Efficacy on a 1-6 scale) have their own, independently
+ * authored cutoffs; the banding itself happens in scoring.ts (operationalBandForScore,
+ * selfEfficacyBandForScore) and this function only does the copy lookup.
+ */
+function describeOperationalRead(band: OperationalBand, role: string | undefined, table: OperationalCopyTable): OperationalReading {
   const copy = table[operationalRoleFor(role)][band];
   return { band, ...copy };
 }
@@ -426,6 +546,7 @@ function describeOperationalRead(score: number, role: string | undefined, table:
 const OPERATIONAL_COPY_BY_FACET: Partial<Record<string, OperationalCopyTable>> = {
   spiritedInitiative: SPIRITED_INITIATIVE_COPY,
   perseveranceOfEffort: PERSEVERANCE_COPY,
+  steadfastness: STEADFASTNESS_COPY,
 };
 
 /**
@@ -452,7 +573,7 @@ export function describeGritFacets(facets: GritFacetScore[], role?: string): Gri
       tagline: variant?.tagline ?? copy.tagline,
       whyItMatters: variant?.whyItMatters ?? copy.whyItMatters,
       whyItMattersLabel: variant?.whyItMattersLabel,
-      operationalRead: operationalTable ? describeOperationalRead(f.yourScore, role, operationalTable) : undefined,
+      operationalRead: operationalTable ? describeOperationalRead(operationalBandForScore(f.yourScore), role, operationalTable) : undefined,
     };
   });
 }
@@ -1186,6 +1307,128 @@ const CONFIDENCE_ROW_COPY: Record<Band, string> = {
 /** Row insight for the single Occupational Self-Efficacy construct shown in this report. */
 export function describeConfidenceRow(band: Band): RowInsight {
   return { id: "self-efficacy", emoji: POSITIVE_ROW_EMOJI[band], band, text: CONFIDENCE_ROW_COPY[band] };
+}
+
+// Occupational Self-Efficacy's own role-calibrated operational read, alongside the row
+// insight above — reuses the same OperationalReading/OperationalCopyTable shape the grit
+// facets use, but against OSES-SF's own 1-6 scale (selfEfficacyBandForScore), since the
+// cutoffs aren't shared with the 1-5 grit facets.
+const SELF_EFFICACY_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Unshakeable Master",
+      interpretation:
+        "You have supreme confidence in your technical execution — dropped into an undocumented legacy codebase or a brand-new AI stack, you know you'll untangle the problems and ship working code.",
+      calibrationTip:
+        "Watch for the blind spot that comes with this much confidence — it can make peer PR critiques or testing requirements easy to underweight. Treat review feedback as a second signal worth its own attention.",
+    },
+    high: {
+      title: "The Resilient Achiever",
+      interpretation:
+        "You stay steady and calm through production bugs and complex stories — you trust yourself to find more than one path through a technical blocker.",
+      calibrationTip:
+        "This is the optimal engineering state — it's what fosters psychological safety, fast learning curves, and steady sprint delivery around you.",
+    },
+    medium: {
+      title: "The Contextual Performer",
+      interpretation:
+        "Your confidence is solid inside your core framework and domain, but unfamiliar tools, complex distributed systems, or a sudden AI-driven pivot can dent it temporarily.",
+      calibrationTip:
+        "A small, isolated spike to prove technical feasibility before committing to a whole feature is usually enough to restore your baseline confidence quickly.",
+    },
+    low: {
+      title: "The Vulnerable Operator",
+      interpretation:
+        "You frequently question your technical depth, especially in a complex debugging session or when comparing yourself to a prolific peer.",
+      calibrationTip:
+        "Try reframing a bug from a personal shortcoming to environmental complexity — and keep a short log of the ones you've resolved, as a concrete record of the capability you've actually built.",
+    },
+    "very-low": {
+      title: "The Imposter Spiral",
+      interpretation:
+        "High Techno-Complexity and time pressure have built into something close to imposter syndrome — feeling chronically underprepared, worried about being found out.",
+      calibrationTip:
+        "This is worth treating as a real signal, not a personal failing. Paired programming or focused mentorship on your current tickets is a safe, direct way to rebuild mastery experiences.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Strategic Pillar",
+      interpretation:
+        "You have real conviction in your architectural judgment, systems trade-offs, and vision — ambiguous, complex constraints energize you rather than intimidating you.",
+      calibrationTip:
+        "Make sure that confidence leaves room for collaborative input, so architectural decisions land as shared reasoning rather than top-down edicts that leave delivery teams out.",
+    },
+    high: {
+      title: "The Grounded Orchestrator",
+      interpretation:
+        "You navigate disputed design patterns, conflicting stakeholder demands, and platform upgrades calmly, trusting your own track record to guide the next one.",
+      calibrationTip:
+        "Channel this confidence into mentoring — helping senior engineers build their own systems-thinking instincts compounds it across the team.",
+    },
+    medium: {
+      title: "The Pragmatic Validator",
+      interpretation:
+        "You're confident evaluating standard architectural blueprints, but you hesitate when designing for untested, high-scale paradigms or bleeding-edge AI frameworks.",
+      calibrationTip:
+        "A lightweight sandbox or proof-of-concept to empirically validate a design hypothesis before finalizing a system contract turns that hesitation into evidence.",
+    },
+    low: {
+      title: "The Tentative Lead",
+      interpretation:
+        "The pace of tech obsolescence is wearing at your architectural authority — you second-guess system decisions, worried about introducing lasting technical debt.",
+      calibrationTip:
+        "Architecture is about trade-offs, not perfection. Writing a formal ADR to share your rationale distributes the decision and the consensus across the team, rather than leaving it resting on you alone.",
+    },
+    "very-low": {
+      title: "The Paralyzed Architect",
+      interpretation:
+        "The volume of platform churn and conflicting organizational politics has frozen your decision-making — declaring a standard starts to feel like signing up to take the blame if it fails.",
+      calibrationTip:
+        "This reflects systemic exhaustion, not a gap in expertise. Stepping back from enterprise-wide mandates to stabilize one single service interface is a realistic place to rebuild.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Transformational Anchor",
+      interpretation:
+        "You have deep belief in your ability to steer a team through reorganization, crisis delivery, and high-stakes client SLAs.",
+      calibrationTip:
+        "Make sure this resilience doesn't obscure the real strain your team members are under at their own, different thresholds — check in directly rather than assuming your bandwidth is theirs.",
+    },
+    high: {
+      title: "The Capable Facilitator",
+      interpretation:
+        "You manage team capacity, resolve cross-functional dependencies, and hold delivery stable with calm, grounded confidence.",
+      calibrationTip: "Maintain this baseline — it directly projects psychological safety and stability across your whole pod.",
+    },
+    medium: {
+      title: "The Operational Pacer",
+      interpretation:
+        "You run daily ceremonies and steady delivery smoothly, but aggressive executive pushback or a complex technical escalation can leave you feeling insecure.",
+      calibrationTip:
+        "Building a strong alliance with your technical architects to co-handle the technical defense in stakeholder negotiations takes that weight off you alone.",
+    },
+    low: {
+      title: "The Anxious Coordinator",
+      interpretation:
+        "Conflicting managerial expectations — developer well-being against delivery deadlines — often leave you overwhelmed, and a slipped milestone can feel like a personal leadership failure.",
+      calibrationTip:
+        "Shifting from personal responsibility to process instrumentation — clear sprint data that objectively shows stakeholders your team's real capacity — takes that weight off you personally.",
+    },
+    "very-low": {
+      title: "The Overwhelmed Lead",
+      interpretation:
+        "You feel unable to affect project outcomes or shield your squad from external pressure, and have largely settled into pure survival mode rather than proactive leadership.",
+      calibrationTip:
+        "This is leadership burnout, not a personal failing. Seeking peer or managerial support to renegotiate your squad's scope and reset operational boundaries is the direct next step.",
+    },
+  },
+};
+
+/** Occupational Self-Efficacy's role-calibrated operational read, keyed off its own 1-6 scale bands. */
+export function describeSelfEfficacyOperationalRead(score: number, role: string | undefined): OperationalReading {
+  return describeOperationalRead(selfEfficacyBandForScore(score), role, SELF_EFFICACY_COPY);
 }
 
 export interface ConfidenceHook {

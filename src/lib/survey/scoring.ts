@@ -269,6 +269,18 @@ export function operationalBandForScore(score: number): OperationalBand {
   return "very-low";
 }
 
+// Occupational Self-Efficacy's own operational band scale — same five-band shape as the
+// grit facets above, but with its own cutoffs, because OSES-SF is a 1-6 scale (not 1-5)
+// with independently authored tier boundaries; it is not a proportional rescale of
+// operationalBandForScore's breakpoints.
+export function selfEfficacyBandForScore(score: number): OperationalBand {
+  if (score >= 5.4) return "very-high";
+  if (score >= 4.5) return "high";
+  if (score >= 3.5) return "medium";
+  if (score >= 2.5) return "low";
+  return "very-low";
+}
+
 /** Grades a score against a fixed comparison point (used outside Grit, which has real ranges). */
 export function tierFor(yourScore: number, comparisonPoint: number): ScoreTier {
   const diff = yourScore - comparisonPoint;

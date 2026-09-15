@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { chooseConfidenceHook, describeConfidenceRow, type RowInsight } from "@/lib/survey/hooks";
+import { chooseConfidenceHook, describeConfidenceRow, describeSelfEfficacyOperationalRead, type RowInsight } from "@/lib/survey/hooks";
 import { bandForModule, bandForScore, computeBenchmarkForModules } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { InsightRows, type InsightRowData } from "@/components/survey/InsightRows";
+import { OperationalRead } from "@/components/survey/OperationalRead";
 import { ReportShell } from "@/components/survey/ReportShell";
 
 const TIER = PROFILE_TIERS.find((t) => t.id === "confidence")!;
@@ -25,6 +26,7 @@ export default async function ConfidenceReportPage() {
     { id: "self-efficacy", title: "Occupational Self-Efficacy", yourScore: efficacyRow.yourScore, max: efficacyRow.max, peerAverage: efficacyRow.peerAverage, peerCount: efficacyRow.peerCount },
   ];
   const insights: RowInsight[] = [describeConfidenceRow(bandForScore(efficacyRow.yourScore, efficacyRow.max))];
+  const operationalRead = describeSelfEfficacyOperationalRead(efficacyRow.yourScore, responses.demographics.role);
 
   return (
     <ReportShell
@@ -35,6 +37,11 @@ export default async function ConfidenceReportPage() {
       responses={responses}
     >
       <InsightRows rows={rows} insights={insights} />
+
+      <div className="rounded-2xl border border-border bg-surface p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Role-calibrated read</p>
+        <OperationalRead reading={operationalRead} />
+      </div>
 
       <div className="rounded-2xl border border-border bg-surface p-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.contextLabel}</p>

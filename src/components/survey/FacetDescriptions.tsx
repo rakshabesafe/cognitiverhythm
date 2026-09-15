@@ -1,4 +1,5 @@
 import type { GritFacetDescription } from "@/lib/survey/hooks";
+import { OperationalRead } from "./OperationalRead";
 
 const TIER_LABEL: Record<GritFacetDescription["tier"], string> = {
   "well-above": "Well above typical",
@@ -6,14 +7,6 @@ const TIER_LABEL: Record<GritFacetDescription["tier"], string> = {
   typical: "Around typical",
   below: "Below typical",
   "well-below": "Room to grow",
-};
-
-const OPERATIONAL_BAND_LABEL: Record<NonNullable<GritFacetDescription["operationalRead"]>["band"], string> = {
-  "very-high": "Very high",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-  "very-low": "Very low",
 };
 
 /** Plain-language meaning + a graded, always-positive read, for every facet — not just the top one. */
@@ -42,17 +35,7 @@ export function FacetDescriptions({ facets }: { facets: GritFacetDescription[] }
           )}
           {f.operationalRead && (
             <div className="mt-2 border-t border-border pt-2">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-foreground">{f.operationalRead.title}</p>
-                <span className="whitespace-nowrap rounded-full border border-accent/40 px-2 py-0.5 text-xs text-accent">
-                  {OPERATIONAL_BAND_LABEL[f.operationalRead.band]}
-                </span>
-              </div>
-              <p className="text-sm text-foreground/90">{f.operationalRead.interpretation}</p>
-              <p className="mt-1.5 text-sm text-foreground/90">
-                <span className="font-medium text-foreground">Calibration tip: </span>
-                {f.operationalRead.calibrationTip}
-              </p>
+              <OperationalRead reading={f.operationalRead} />
             </div>
           )}
         </div>
