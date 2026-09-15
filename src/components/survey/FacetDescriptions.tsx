@@ -8,6 +8,14 @@ const TIER_LABEL: Record<GritFacetDescription["tier"], string> = {
   "well-below": "Room to grow",
 };
 
+const SPIRITED_INITIATIVE_BAND_LABEL: Record<NonNullable<GritFacetDescription["spiritedInitiative"]>["band"], string> = {
+  "very-high": "Very high",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+  "very-low": "Very low",
+};
+
 /** Plain-language meaning + a graded, always-positive read, for every facet — not just the top one. */
 export function FacetDescriptions({ facets }: { facets: GritFacetDescription[] }) {
   return (
@@ -31,6 +39,21 @@ export function FacetDescriptions({ facets }: { facets: GritFacetDescription[] }
               <span className="font-medium text-foreground">{f.whyItMattersLabel ?? "Why it matters in software"}: </span>
               {f.whyItMatters}
             </p>
+          )}
+          {f.spiritedInitiative && (
+            <div className="mt-2 border-t border-border pt-2">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-foreground">{f.spiritedInitiative.title}</p>
+                <span className="whitespace-nowrap rounded-full border border-accent/40 px-2 py-0.5 text-xs text-accent">
+                  {SPIRITED_INITIATIVE_BAND_LABEL[f.spiritedInitiative.band]}
+                </span>
+              </div>
+              <p className="text-sm text-foreground/90">{f.spiritedInitiative.interpretation}</p>
+              <p className="mt-1.5 text-sm text-foreground/90">
+                <span className="font-medium text-foreground">Calibration tip: </span>
+                {f.spiritedInitiative.calibrationTip}
+              </p>
+            </div>
           )}
         </div>
       ))}

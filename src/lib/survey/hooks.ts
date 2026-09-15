@@ -4,6 +4,7 @@
 import {
   bandForModule,
   bandForScore,
+  bandForSpiritedInitiative,
   computeBandwidthSplit,
   computeCognitiveCurrency,
   computeCollaborationBalance,
@@ -18,6 +19,7 @@ import {
   type GritFacetScore,
   type PersistenceQualityReading,
   type ScoreTier,
+  type SpiritedInitiativeBand,
 } from "./scoring";
 
 const TASK_PERFORMANCE_ITEMS = ["TP1", "TP2", "TP3", "TP4", "TP5"];
@@ -146,6 +148,161 @@ export interface GritFacetDescription {
   tagline?: string;
   whyItMatters?: string;
   whyItMattersLabel?: string;
+  /** Present only for Spirited Initiative — its role-calibrated operational read. */
+  spiritedInitiative?: SpiritedInitiativeReading;
+}
+
+// Spirited Initiative's operational read is role-specific in a way the other three facets
+// aren't: the same score means "dives into production alerts unprompted" for an engineer,
+// "writes ADRs ahead of a migration" for an architect, and "clears cross-team roadblocks"
+// for a manager. This exact three-way split matches demographics.role's own options
+// (Software Engineer / Designer/Architect / Manager), so it reads the field directly
+// rather than reusing the coarser ic/leader grouping the other reports use.
+type SpiritedInitiativeRole = "engineer" | "architect" | "manager";
+
+function spiritedInitiativeRoleFor(role: string | undefined): SpiritedInitiativeRole {
+  if (role === "Designer/Architect") return "architect";
+  if (role === "Manager") return "manager";
+  return "engineer";
+}
+
+interface SpiritedInitiativeReading {
+  band: SpiritedInitiativeBand;
+  /** The named "operational state" for this role + band, e.g. "The Autonomous Vanguard". */
+  title: string;
+  interpretation: string;
+  calibrationTip: string;
+}
+
+interface SpiritedInitiativeCopy {
+  title: string;
+  interpretation: string;
+  calibrationTip: string;
+}
+
+// Every "very-low" entry stays genuinely honest about the operational state (this facet's
+// whole point is naming what initiative looks like under real distress) while still
+// framing the calibration tip as a concrete, achievable next step rather than a verdict —
+// matching the house rule of never leaving a participant with nothing to do about a score.
+const SPIRITED_INITIATIVE_COPY: Record<SpiritedInitiativeRole, Record<SpiritedInitiativeBand, SpiritedInitiativeCopy>> = {
+  engineer: {
+    "very-high": {
+      title: "The Autonomous Vanguard",
+      interpretation:
+        "When a build pipeline fails or production throws an alert, you dive in immediately without waiting for a triage ticket. You regularly write developer tooling and automate repetitive team tasks on your own initiative.",
+      calibrationTip:
+        "Watch for \"rogue refactoring\" — keep spontaneous code improvements aligned with your sprint commitments and the PR review process, so momentum doesn't outrun the team's ability to track it.",
+    },
+    high: {
+      title: "The Proactive Problem-Solver",
+      interpretation:
+        "You maintain strong technical ownership. When roadblocks arise, you explore root causes independently and propose concrete fixes rather than just escalating the bug.",
+      calibrationTip:
+        "Keep this rhythm going — it's the behavior that most reliably accelerates a move into senior and lead engineering roles.",
+    },
+    medium: {
+      title: "The Balanced Responder",
+      interpretation:
+        "You handle unexpected problems within your own features capably, but you rarely volunteer to troubleshoot issues outside your assigned sprint backlog.",
+      calibrationTip:
+        "Look for a low-risk way to expand your ownership — picking up an unassigned flaky test or refining shared documentation is an easy first step.",
+    },
+    low: {
+      title: "The Structured Executor",
+      interpretation:
+        "You operate strictly by the spec. When you hit architectural ambiguity or an unexpected test failure, your instinct is to pause and wait for guidance or an explicit ticket.",
+      calibrationTip:
+        "If you're hesitating because you're worried about breaking shared code, try writing an isolated reproduction test to validate your hypothesis before asking for help — it de-risks the exploration.",
+    },
+    "very-low": {
+      title: "The Dormant / Detached Executor",
+      interpretation:
+        "Unexpected roadblocks or incidents tend to cause a noticeable freeze or disengagement — you rarely touch unassigned code, and rapid change can feel overwhelming.",
+      calibrationTip:
+        "This far more often signals high Techno-Complexity or cognitive depletion than a skills gap. Breaking an intimidating roadblock into one small, investigative experiment is usually the fastest way to rebuild momentum.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Emergent Innovator",
+      interpretation:
+        "You proactively build proofs-of-concept, stress-test next-generation approaches, and tackle systemic technical debt months before the business asks for it.",
+      calibrationTip:
+        "Guard against over-engineering — make sure exploratory prototypes are aimed at real, current constraints rather than speculative elegance.",
+    },
+    high: {
+      title: "The Preemptive Stabilizer",
+      interpretation:
+        "You actively monitor system boundaries and write Architectural Decision Records to remove ambiguity before a migration starts.",
+      calibrationTip:
+        "This is the sweet spot for architectural leadership — it de-risks multi-quarter roadmaps without burying your teams in constant paradigm churn.",
+    },
+    medium: {
+      title: "The Pragmatic Maintainer",
+      interpretation:
+        "You address architectural bottlenecks and refactor once they're proven pain points, but you rarely initiate exploratory work on emerging platforms ahead of need.",
+      calibrationTip:
+        "Protecting a small, regular slice of your time for prototyping new tooling keeps technical debt from accumulating unchecked.",
+    },
+    low: {
+      title: "The Reactive Governance Lead",
+      interpretation:
+        "You function mainly as an approver or reviewer rather than a driver — evaluating RFCs as they're submitted, but rarely initiating a redesign or resolving architectural ambiguity yourself.",
+      calibrationTip:
+        "Reactive architecture tends to push developers into siloed decisions of their own. Naming the trade-offs yourself, rather than waiting for friction to escalate, closes that gap.",
+    },
+    "very-low": {
+      title: "The Inertial Architect",
+      interpretation:
+        "Deep systemic friction has built into architectural inertia — disputed system boundaries and complex cross-service dependencies go unaddressed, and technical entropy spreads.",
+      calibrationTip:
+        "This usually reflects burnout from sustained organizational bureaucracy rather than a lack of ability. Picking one small, contained subsystem for an isolated pilot is a realistic way to break the stalemate.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Transformational Champion",
+      interpretation:
+        "You vigorously clear cross-functional roadblocks, push back on unrealistic timelines, and proactively negotiate dedicated platform-health time with product leadership.",
+      calibrationTip:
+        "Keep your initiative aimed at organizational unblocking rather than dictating tactical implementation — that's what protects your team's own autonomy.",
+    },
+    high: {
+      title: "The Strategic Unblocker",
+      interpretation:
+        "You spot inter-team dependency delays weeks ahead of launch, de-escalating team stress during crunch while keeping delivery priorities clear.",
+      calibrationTip:
+        "Keep cultivating this posture — it's what gives engineering teams the psychological safety to sustain high execution velocity.",
+    },
+    medium: {
+      title: "The Process Coordinator",
+      interpretation:
+        "You run standard ceremonies, track sprint metrics, and resolve blockers once they're flagged in standup, but rarely push for proactive organizational change.",
+      calibrationTip:
+        "Shifting from reactive issue-tracking to looking two sprints ahead for third-party and API dependencies is a concrete way to get ahead of the next blocker.",
+    },
+    low: {
+      title: "The Administrative Gatekeeper",
+      interpretation:
+        "You lean heavily on formal reporting and escalation channels. When cross-team conflict comes up, you tend to defer to top-down direction rather than stepping in directly.",
+      calibrationTip:
+        "Over-reliance on formal escalation slows delivery down. Taking on one difficult stakeholder conversation directly protects your team's focus more than routing it upward would.",
+    },
+    "very-low": {
+      title: "The Passive Conduit",
+      interpretation:
+        "Under organizational stress or unclear authority, you've settled into passing client and executive pressure straight down to the team without filtering it.",
+      calibrationTip:
+        "This is a real signal of leadership strain, not a personal failing. Naming the actual operational blocker to your own leadership and asking for cover is the fastest way to regain room to maneuver.",
+    },
+  },
+};
+
+/** Spirited Initiative's role-calibrated read: an absolute-score band, not a peer/reference comparison. */
+function describeSpiritedInitiative(score: number, role: string | undefined): SpiritedInitiativeReading {
+  const band = bandForSpiritedInitiative(score);
+  const copy = SPIRITED_INITIATIVE_COPY[spiritedInitiativeRoleFor(role)][band];
+  return { band, ...copy };
 }
 
 /**
@@ -171,6 +328,7 @@ export function describeGritFacets(facets: GritFacetScore[], role?: string): Gri
       tagline: variant?.tagline ?? copy.tagline,
       whyItMatters: variant?.whyItMatters ?? copy.whyItMatters,
       whyItMattersLabel: variant?.whyItMattersLabel,
+      spiritedInitiative: f.id === "spiritedInitiative" ? describeSpiritedInitiative(f.yourScore, role) : undefined,
     };
   });
 }
