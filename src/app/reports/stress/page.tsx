@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { chooseStressHook, describeStressRow, type RowInsight } from "@/lib/survey/hooks";
+import { chooseStressHook, describeStressRow, stressDimensionMeaning, type RowInsight } from "@/lib/survey/hooks";
 import { bandForModule, bandForScore, computeBenchmarkForModules, computeSectionBreakdown } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { InsightRows, type InsightRowData } from "@/components/survey/InsightRows";
@@ -32,8 +32,17 @@ export default async function StressReportPage() {
       peerCount: s.peerCount,
       referenceMean: s.reference?.mean,
       referenceRange: s.reference?.range,
+      meaning: stressDimensionMeaning(s.id),
     })),
-    { id: "ai-anxiety", title: "AI Job Anxiety", yourScore: aiAnxietyRow.yourScore, max: aiAnxietyRow.max, peerAverage: aiAnxietyRow.peerAverage, peerCount: aiAnxietyRow.peerCount },
+    {
+      id: "ai-anxiety",
+      title: "AI Job Anxiety",
+      yourScore: aiAnxietyRow.yourScore,
+      max: aiAnxietyRow.max,
+      peerAverage: aiAnxietyRow.peerAverage,
+      peerCount: aiAnxietyRow.peerCount,
+      meaning: stressDimensionMeaning("ai-anxiety"),
+    },
   ];
   const insights: RowInsight[] = rows.map((row) => describeStressRow(row.id, bandForScore(row.yourScore, row.max)));
 

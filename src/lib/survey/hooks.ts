@@ -1158,6 +1158,22 @@ export function describeStressRow(id: string, band: Band): RowInsight {
   return { id, emoji: NEGATIVE_ROW_EMOJI[band], band, text: STRESS_ROW_COPY[id][band] };
 }
 
+// A plain-language "what this actually measures" line for each stress dimension — shown
+// above the score bar so the graded read below it (STRESS_ROW_COPY) has context. Without
+// this, a participant sees "Uncertainty: 3.2 / 5" with no idea whether that's about their
+// tools, their manager, or their job security.
+const STRESS_DIMENSION_MEANING: Record<string, string> = {
+  Overload: "How much technology forces you to work faster, longer, or juggle more than feels manageable.",
+  Complexity: "How hard the technologies you're required to use are to learn and keep up with.",
+  Uncertainty: "How often the tools, systems, and platforms around you change without warning.",
+  "ai-anxiety": "How much you worry that AI will automate your role or make your current skills obsolete.",
+};
+
+/** id: "Overload" | "Complexity" | "Uncertainty" | "ai-anxiety" — a one-line definition of what this dimension measures. */
+export function stressDimensionMeaning(id: string): string {
+  return STRESS_DIMENSION_MEANING[id] ?? "";
+}
+
 export interface StressHook {
   id: "pressure-cooker" | "obsolescence-spiral" | "existential-wait" | "shielded-operator";
   archetypeName: string;

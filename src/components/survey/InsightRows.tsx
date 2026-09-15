@@ -10,6 +10,8 @@ export interface InsightRowData {
   /** Optional fixed typical-score reference — a mean, a range, or both. */
   referenceMean?: number;
   referenceRange?: [number, number];
+  /** Optional one-line "what this dimension actually measures" — shown before the score so the graded read below it has context. */
+  meaning?: string;
 }
 
 interface InsightRowsProps {
@@ -50,6 +52,7 @@ export function InsightRows({ rows, insights }: InsightRowsProps) {
                 {row.yourScore.toFixed(1)} / {row.max.toFixed(1)}
               </span>
             </div>
+            {row.meaning && <p className="mb-2 text-xs text-muted">{row.meaning}</p>}
             <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
               <div
                 className="h-full rounded-full bg-accent"
