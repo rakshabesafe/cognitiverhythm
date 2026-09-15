@@ -261,24 +261,40 @@ export type ScoreTier = "well-below" | "below" | "typical" | "above" | "well-abo
 // on one means the same underlying score range as a "High" on another.
 export type OperationalBand = "very-high" | "high" | "medium" | "low" | "very-low";
 
-export function operationalBandForScore(score: number): OperationalBand {
-  if (score >= 4.6) return "very-high";
-  if (score >= 3.8) return "high";
-  if (score >= 3.2) return "medium";
-  if (score >= 2.4) return "low";
+/**
+ * Shared shape behind every construct-specific operational band function below: each
+ * instrument (grit facets, OSES-SF, the Technostress sub-dimensions, …) has its own
+ * independently authored cutoffs — not a proportional rescale of any other one — but they
+ * all partition their scale into the same five bands, so the lookup logic itself is
+ * written once here.
+ */
+function bandFromCutoffs(score: number, [veryHigh, high, medium, low]: readonly [number, number, number, number]): OperationalBand {
+  if (score >= veryHigh) return "very-high";
+  if (score >= high) return "high";
+  if (score >= medium) return "medium";
+  if (score >= low) return "low";
   return "very-low";
 }
 
-// Occupational Self-Efficacy's own operational band scale — same five-band shape as the
-// grit facets above, but with its own cutoffs, because OSES-SF is a 1-6 scale (not 1-5)
-// with independently authored tier boundaries; it is not a proportional rescale of
-// operationalBandForScore's breakpoints.
+// Some grit facets (currently Spirited Initiative, Perseverance of Effort, and
+// Steadfastness) share this 1-5 scale cutoff set, rather than the reference-range
+// comparison the other facets use, because their interpretation is role-specific and
+// operational — "what does this look like in your job" — not a comparison to a typical
+// peer score.
+export function operationalBandForScore(score: number): OperationalBand {
+  return bandFromCutoffs(score, [4.6, 3.8, 3.2, 2.4]);
+}
+
+// Occupational Self-Efficacy's own cutoffs — OSES-SF is a 1-6 scale (not 1-5).
 export function selfEfficacyBandForScore(score: number): OperationalBand {
-  if (score >= 5.4) return "very-high";
-  if (score >= 4.5) return "high";
-  if (score >= 3.5) return "medium";
-  if (score >= 2.5) return "low";
-  return "very-low";
+  return bandFromCutoffs(score, [5.4, 4.5, 3.5, 2.5]);
+}
+
+// The Technostress sub-dimensions' shared cutoffs, per Tarafdar et al. (2007) / Ragu-Nathan
+// et al. (2008) — a 1-5 scale like the grit facets, but with independently authored tier
+// boundaries. Techno-Overload and Techno-Uncertainty both use this exact scale.
+export function technostressBandForScore(score: number): OperationalBand {
+  return bandFromCutoffs(score, [4.4, 3.6, 2.8, 2.0]);
 }
 
 /** Grades a score against a fixed comparison point (used outside Grit, which has real ranges). */

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireParticipant } from "@/lib/auth/session";
-import { chooseStressHook, describeStressRow, stressDimensionMeaning, type RowInsight } from "@/lib/survey/hooks";
+import { chooseStressHook, describeStressRow, describeTechnostressOperationalRead, stressDimensionMeaning, type RowInsight } from "@/lib/survey/hooks";
 import { bandForModule, bandForScore, computeBenchmarkForModules, computeSectionBreakdown } from "@/lib/survey/scoring";
 import { PROFILE_TIERS } from "@/lib/survey/tiers";
 import { InsightRows, type InsightRowData } from "@/components/survey/InsightRows";
+import { OperationalRead } from "@/components/survey/OperationalRead";
 import { ReportShell } from "@/components/survey/ReportShell";
 
 const TIER = PROFILE_TIERS.find((t) => t.id === "stress")!;
@@ -45,6 +46,9 @@ export default async function StressReportPage() {
     },
   ];
   const insights: RowInsight[] = rows.map((row) => describeStressRow(row.id, bandForScore(row.yourScore, row.max)));
+  const operationalReads = sections
+    .map((s) => ({ id: s.id, label: s.label, reading: describeTechnostressOperationalRead(s.id, s.yourScore, responses.demographics.role) }))
+    .filter((r): r is { id: string; label: string; reading: NonNullable<typeof r.reading> } => r.reading !== null);
 
   return (
     <ReportShell
@@ -55,6 +59,13 @@ export default async function StressReportPage() {
       responses={responses}
     >
       <InsightRows rows={rows} insights={insights} />
+
+      {operationalReads.map((r) => (
+        <div key={r.id} className="rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Role-calibrated read — {r.label}</p>
+          <OperationalRead reading={r.reading} />
+        </div>
+      ))}
 
       <div className="rounded-2xl border border-border bg-surface p-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{hook.contextLabel}</p>

@@ -10,6 +10,7 @@ import {
   HIGH,
   operationalBandForScore,
   selfEfficacyBandForScore,
+  technostressBandForScore,
   tierForRange,
   type Band,
   type BandwidthSplit,
@@ -1172,6 +1173,332 @@ const STRESS_DIMENSION_MEANING: Record<string, string> = {
 /** id: "Overload" | "Complexity" | "Uncertainty" | "ai-anxiety" — a one-line definition of what this dimension measures. */
 export function stressDimensionMeaning(id: string): string {
   return STRESS_DIMENSION_MEANING[id] ?? "";
+}
+
+const TECHNO_OVERLOAD_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Feature Factory Treadmill",
+      interpretation:
+        "Constant ticket churn, simultaneous pull requests, and tight sprint commitments push you to rush — cutting corners on testing, refactoring, or code quality just to keep pace.",
+      calibrationTip:
+        "Strict work-in-progress limits — one complex story at a time, declining ad-hoc interruptions during active coding — protect against the defect rate this pace tends to produce.",
+    },
+    high: {
+      title: "The High-Throughput Sprint",
+      interpretation:
+        "Your backlog stays continuously packed — the pressure to deliver quickly and switch across tickets steadily depletes your cognitive reserves.",
+      calibrationTip:
+        "A protected 90-minute no-interruption block daily, with routine reviews and status updates moved to one fixed window, keeps that depletion from compounding.",
+    },
+    medium: {
+      title: "The Balanced Delivery Rhythm",
+      interpretation:
+        "Sprints are full and active, but you still have enough room to think through edge cases, write real tests, and submit clean PRs.",
+      calibrationTip:
+        "This is the optimal long-term cadence — it sustains release output without accumulating technical debt or burnout.",
+    },
+    low: {
+      title: "The Protected Developer",
+      interpretation:
+        "You face minimal pressure around deadlines or task volume, with real freedom to explore solutions deeply and polish your code.",
+      calibrationTip:
+        "Worth using this low-drag phase to take on a harder core component or automate a manual build/test step for the squad.",
+    },
+    "very-low": {
+      title: "The Slack Pipeline",
+      interpretation: "Workload demands are minimal, with little expectation around speed or output volume.",
+      calibrationTip:
+        "Worth checking this reflects a planned inter-sprint cooling period rather than under-allocation or a misalignment in team priorities.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Governance Bottleneck",
+      interpretation:
+        "Concurrent design reviews, RFC approvals, incident post-mortems, and cross-team dependencies leave zero room for deep, forward-looking systems modeling.",
+      calibrationTip:
+        "Decentralizing governance — self-service ADR templates, delegating standard-pattern reviews to senior developers — is the direct way to get some of that time back.",
+    },
+    high: {
+      title: "The Compressed Strategist",
+      interpretation:
+        "Fast release cycles leave little architectural runway — designs often get drafted under real time compression, risking a premature compromise.",
+      calibrationTip:
+        "Reserving one full day per sprint strictly for architectural research and threat modeling, free of ad-hoc consultation, protects the thinking time this needs.",
+    },
+    medium: {
+      title: "The Steady Systems Orchestrator",
+      interpretation:
+        "The volume of technical initiatives and review requests roughly matches your bandwidth — you can evaluate trade-offs thoroughly before signing off.",
+      calibrationTip: "Documenting architectural anti-patterns as you go reduces the repeat inquiries that would otherwise erode this balance.",
+    },
+    low: {
+      title: "The Deliberate Planner",
+      interpretation: "You have substantial architectural bandwidth — room for real prototypes, benchmarking, and vendor evaluation.",
+      calibrationTip:
+        "Channeling this capacity into long-term technology roadmapping or mentoring other architects makes good use of the room you have.",
+    },
+    "very-low": {
+      title: "The Detached Blueprint",
+      interpretation: "Very few system demands or governance reviews are actually crossing your desk.",
+      calibrationTip:
+        "Worth checking whether squads are bypassing architecture review entirely to move faster — that shows up later as unmonitored technical entropy.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Operational Firestorm",
+      interpretation:
+        "Relentless escalations, status meetings, stakeholder deadline pushes, and unblocking demands have overwhelmed your schedule — most of your day goes to reacting rather than steering.",
+      calibrationTip:
+        "An immediate calendar audit — delegating a couple of status syncs to team leads, pushing back on uncommitted scope — is the fastest way out of the reactive loop.",
+    },
+    high: {
+      title: "The High-Pressure Shield",
+      interpretation: "You're carrying real operational weight to shield your squad from aggressive timelines and executive pressure.",
+      calibrationTip:
+        "Objective sprint burn-up data helps show stakeholders the actual trade-off between speed and quality, rather than absorbing all of that friction yourself.",
+    },
+    medium: {
+      title: "The Controlled Cadence",
+      interpretation:
+        "Your squad runs at a healthy, predictable velocity, leaving you real time for 1:1 coaching, capacity planning, and strategic alignment.",
+      calibrationTip: "This stable cadence is a good window to invest in career development frameworks and cross-training.",
+    },
+    low: {
+      title: "The Well-Buffered Pod",
+      interpretation: "Deadlines are generous, deliverables are well-spaced, and stakeholder friction is genuinely low.",
+      calibrationTip: "Worth using this low-stress stretch for innovation spikes, technical debt cleanup, or open-source contribution.",
+    },
+    "very-low": {
+      title: "The Dormant Pipeline",
+      interpretation: "Delivery pressure, meeting overhead, and ticket volume are all minimal right now.",
+      calibrationTip: "Worth reviewing team utilization and roadmap alignment to make sure the squad is positioned against genuinely high-value work.",
+    },
+  },
+};
+
+const TECHNO_UNCERTAINTY_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Moving-Target Trap",
+      interpretation:
+        "Constant API changes, library deprecations, and weekly framework updates make your codebase feel fragile — you spend more time fixing broken dependencies and unlearning recent practices than building features.",
+      calibrationTip:
+        "Anchor your focus to core language primitives, systems design, and algorithmic foundations rather than chasing every newly launched tool or transient wrapper.",
+    },
+    high: {
+      title: "The High-Churn Pacer",
+      interpretation:
+        "You feel continuous pressure to upgrade packages, adopt new CI/CD pipelines, and incorporate emerging AI developer tooling into daily sprints.",
+      calibrationTip:
+        "A standard weekly learning block, rather than reacting to every release as it lands, plus pushing for stable semantic versioning within team dependencies, both take the edge off this.",
+    },
+    medium: {
+      title: "The Balanced Adapter",
+      interpretation:
+        "Tools and internal platforms evolve, but upgrades follow a manageable rhythm — you absorb changes as a normal part of maintenance without feeling disoriented.",
+      calibrationTip: "This is the sustainable zone for modern engineering delivery — worth protecting as-is.",
+    },
+    low: {
+      title: "The Settled Builder",
+      interpretation:
+        "Your day-to-day stack is stable, well-documented, and mature — you have clear patterns to follow and rarely hit a sudden disruption to your environment.",
+      calibrationTip:
+        "An occasional exploratory spike into newer patterns keeps your skills current, so a future mandatory migration doesn't catch you off guard.",
+    },
+    "very-low": {
+      title: "The Legacy Harbor",
+      interpretation: "Technology change almost never touches your operational scope — the stack is static or locked down.",
+      calibrationTip:
+        "Worth checking this reflects a deliberately stable environment rather than an obsolete one, and that your skills stay transferable beyond this one platform.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Paradigm Whiplash",
+      interpretation:
+        "Cloud platforms, container runtimes, API contracts, and AI frameworks are shifting faster than your architecture can stabilize — today's blueprint risks being deprecated before a squad even ships it.",
+      calibrationTip:
+        "Decoupling core domain logic from the underlying infrastructure — strict interface boundaries, abstraction layers, anti-corruption layers — absorbs a lot of this churn before it reaches your design.",
+    },
+    high: {
+      title: "The Active Horizon Scanner",
+      interpretation:
+        "You're constantly balancing keeping the architecture modern against the change friction it creates for developers — shifts mean regularly revising roadmaps and platform standards.",
+      calibrationTip:
+        "A formal Technology Radar (Adopt/Trial/Assess/Hold) gives squads a transparent timeline for when a new tool actually gets sanctioned, rather than ad-hoc churn.",
+    },
+    medium: {
+      title: "The Controlled Evolver",
+      interpretation:
+        "System upgrades, service migrations, and platform enhancements are planned and executed in structured releases — the architectural vision stays stable.",
+      calibrationTip: "This stability is a good foundation for standardizing ADRs across squads while things are calm.",
+    },
+    low: {
+      title: "The Rigid Architecture",
+      interpretation:
+        "Your platform architecture has settled into fixed conventions — cross-service patterns and third-party integrations rarely change.",
+      calibrationTip:
+        "Worth periodically checking whether this stability has quietly turned into resistance to genuinely valuable technology moves.",
+    },
+    "very-low": {
+      title: "The Frozen Blueprint",
+      interpretation: "Systems operate in a closed, effectively immutable architecture with close to zero tooling volatility.",
+      calibrationTip:
+        "Worth a periodic look at long-term maintainability, vendor lock-in, and end-of-life support for the components this rests on.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Roadmap Quicksand",
+      interpretation:
+        "Continuous shifts in company-wide platforms, compliance requirements, security tooling, and developer stacks make sprint estimation and long-term capacity planning genuinely difficult.",
+      calibrationTip:
+        "Rolling 6-week discovery-and-delivery increments absorb this kind of churn far better than committing to rigid multi-month milestones.",
+    },
+    high: {
+      title: "The Churn Shock-Absorber",
+      interpretation:
+        "Your squad gets disrupted by mandatory internal IT migrations, SSO reconfigurations, or framework deprecations mandated from above.",
+      calibrationTip:
+        "Negotiating a \"platform enablement\" buffer directly into sprint planning keeps squads from absorbing this overhead on their own time.",
+    },
+    medium: {
+      title: "The Predictable Delivery Cadence",
+      interpretation:
+        "Enterprise tool changes happen at a healthy interval with adequate transition time and release notes — delivery pipelines stay dependable.",
+      calibrationTip: "Standardizing onboarding around the current toolchain is a good use of this stability while it lasts.",
+    },
+    low: {
+      title: "The Steady Pipeline",
+      interpretation:
+        "Your team has high operational certainty — sprints run smoothly with minimal disruption from toolchain failures or unexpected pivots.",
+      calibrationTip: "This stability is a real asset — worth capitalizing on for sprint velocity and team-level knowledge sharing.",
+    },
+    "very-low": {
+      title: "The Inertial Silo",
+      interpretation: "The operational environment is essentially static — neither process nor tooling sees meaningful change.",
+      calibrationTip:
+        "Keeping the team's eyes on external industry practice helps avoid an isolated delivery silo that makes a future pivot harder than it needs to be.",
+    },
+  },
+};
+
+const TECHNO_COMPLEXITY_COPY: OperationalCopyTable = {
+  engineer: {
+    "very-high": {
+      title: "The Tooling Maze",
+      interpretation:
+        "The architecture, configuration overhead, and third-party dependencies feel completely unintuitive — you spend real hours deciphering opaque documentation, configuration errors, and arcane library behavior.",
+      calibrationTip:
+        "High complexity drains self-efficacy fast. Isolating a difficult framework into a small sandbox app with basic tests, to master the core abstractions before writing production logic, is the fastest way back.",
+    },
+    high: {
+      title: "The Steep Ramp",
+      interpretation:
+        "Navigating an unfamiliar framework, microservice communication, or new cloud-native tooling takes real mental strain and study time.",
+      calibrationTip: "Pairing with a domain specialist for a couple of sessions cuts through architectural jargon faster than reading alone.",
+    },
+    medium: {
+      title: "The Deliberate Learner",
+      interpretation:
+        "Modern platforms and tools take focused study and trial, but you consistently work through the learning curve to real competence.",
+      calibrationTip: "This is the standard learning posture for modern software development — worth maintaining as-is.",
+    },
+    low: {
+      title: "The Fluent Developer",
+      interpretation:
+        "You pick up a new SDK, language, or dev environment with ease — technical jargon and complex interfaces rarely intimidate you.",
+      calibrationTip: "Worth using that fluency to write onboarding guides or starter boilerplates for peers facing a steeper curve.",
+    },
+    "very-low": {
+      title: "The Effortless Craftsman",
+      interpretation: "Your toolchain and architecture feel entirely transparent and natural to navigate.",
+      calibrationTip: "Worth checking your environment is genuinely stretching you, rather than keeping you confined to simple, repetitive work.",
+    },
+  },
+  architect: {
+    "very-high": {
+      title: "The Architectural Knot",
+      interpretation:
+        "Distributed systems, hybrid cloud topologies, legacy integration points, and emerging AI runtimes have compounded into an ecosystem that's genuinely hard to hold as a unified whole.",
+      calibrationTip:
+        "Strict system boundaries and interface contracts — decomposing an unwieldy monolith into decoupled, domain-driven pieces — is the direct way to untangle this.",
+    },
+    high: {
+      title: "The High-Cognitive-Load Blueprint",
+      interpretation:
+        "Evaluating multi-layered systems, security policy, and a polyglot stack creates real strain — the depth of knowledge needed to make a safe call here is taxing.",
+      calibrationTip:
+        "You don't need to hold the whole system in your head — automated dependency-graph tooling and distributed tracing surface the architecture more objectively than memory can.",
+    },
+    medium: {
+      title: "The Measured Systems Modeler",
+      interpretation:
+        "Complex platform trade-offs and non-functional requirements need careful decomposition, and you have the mental models to work through them systematically.",
+      calibrationTip: "Standardizing your diagrams (the C4 model works well) keeps a complex multi-tier topology legible to the developers reading it.",
+    },
+    low: {
+      title: "The Systems Simplifier",
+      interpretation:
+        "You have real architectural clarity — translating complex distributed protocols and requirements into clean, manageable design patterns.",
+      calibrationTip: "Keep simplifying systems — reducing complexity is the strongest defense against technostress spreading to the rest of the team.",
+    },
+    "very-low": {
+      title: "The Intuitive Architect",
+      interpretation: "System topologies and design trade-offs appear straightforward and easy to orchestrate.",
+      calibrationTip: "Worth verifying nothing's being oversimplified — that edge cases, failovers, and security constraints still get the depth they need.",
+    },
+  },
+  manager: {
+    "very-high": {
+      title: "The Technical Fog",
+      interpretation:
+        "The volume of technical terminology, intricate deployment pipelines, and specialized concepts makes it genuinely hard to see the real delivery blockers or judge a technical estimate.",
+      calibrationTip:
+        "Leaning on your lead architects for translation, and insisting blockers get explained in terms of business impact and delivery risk, closes this gap fastest.",
+    },
+    high: {
+      title: "The Complex Governance Load",
+      interpretation:
+        "Managing modern toolchains, observability platforms, and multi-cloud compliance takes substantial ongoing effort just to stay current.",
+      calibrationTip:
+        "Standardizing team dashboards around a few key DORA metrics, instead of monitoring a dozen fragmented consoles, simplifies this considerably.",
+    },
+    medium: {
+      title: "The Technically Grounded Lead",
+      interpretation:
+        "You grasp the essential mechanics of your squad's stack and can evaluate sprint complexity and dependencies with reasonable comfort.",
+      calibrationTip: "Keep asking clarifying architectural questions during grooming — it keeps estimates honest about the real technical complexity.",
+    },
+    low: {
+      title: "The Fluent Facilitator",
+      interpretation: "You navigate technical discussions, architectural dependencies, and platform constraints with real ease.",
+      calibrationTip: "Worth using that fluency as the bridge between non-technical stakeholders and the engineering squad.",
+    },
+    "very-low": {
+      title: "The Transparent Operation",
+      interpretation: "Team tools, delivery metrics, and engineering workflows are clear and operate without confusion.",
+      calibrationTip: "Worth maintaining this clarity while keeping process lightweight and flexible for developers.",
+    },
+  },
+};
+
+// Keyed by the same section ids computeSectionBreakdown("technostress", …) already
+// produces (Overload / Complexity / Uncertainty), so the Stress report can look a table up
+// by row id rather than needing three separately named functions.
+const TECHNOSTRESS_OPERATIONAL_COPY: Record<string, OperationalCopyTable> = {
+  Overload: TECHNO_OVERLOAD_COPY,
+  Complexity: TECHNO_COMPLEXITY_COPY,
+  Uncertainty: TECHNO_UNCERTAINTY_COPY,
+};
+
+/** id: "Overload" | "Complexity" | "Uncertainty" — that sub-dimension's role-calibrated operational read, or null if it has none yet. */
+export function describeTechnostressOperationalRead(id: string, score: number, role: string | undefined): OperationalReading | null {
+  const table = TECHNOSTRESS_OPERATIONAL_COPY[id];
+  return table ? describeOperationalRead(technostressBandForScore(score), role, table) : null;
 }
 
 export interface StressHook {
